@@ -7,7 +7,8 @@ import { configureApp } from './app.setup';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, new ExpressAdapter());
   configureApp(app);
-  await app.listen(Number(process.env.PORT ?? 3000));
+  const port = Number.parseInt(process.env.PORT ?? '', 10);
+  await app.listen(Number.isNaN(port) ? 3000 : port);
 }
 
 void bootstrap();

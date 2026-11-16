@@ -7,5 +7,17 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
   },
-  plugins: [swc.vite({ module: { type: 'es6' } })],
+  // swcrc: false so the build-only .swcrc (which excludes specs) is not applied to tests.
+  plugins: [
+    swc.vite({
+      swcrc: false,
+      module: { type: 'es6' },
+      jsc: {
+        parser: { syntax: 'typescript', decorators: true },
+        transform: { legacyDecorator: true, decoratorMetadata: true },
+        target: 'es2023',
+        keepClassNames: true,
+      },
+    }),
+  ],
 });
