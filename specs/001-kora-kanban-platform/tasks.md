@@ -44,49 +44,49 @@ integration tests only where a rule is easy to get wrong.
 
 **Purpose**: Monorepo, tooling, local dev stack
 
-- [ ] T001 Create the monorepo root with these files:
+- [x] T001 Create the monorepo root with these files:
   - `package.json`: `"private": true`, `packageManager` pnpm@10, and scripts `dev`, `build`, `lint`, `typecheck`, `test`, `e2e`, `i18n:check` that delegate to `turbo`.
   - `pnpm-workspace.yaml`: packages `apps/*`, `packages/*`, `e2e`.
   - `turbo.json`: pipelines `build`, `dev` (persistent, no cache), `lint`, `typecheck`, `test`.
   - `.gitignore`, `.nvmrc` (`22`), `.editorconfig`.
-- [ ] T002 [P] Create `packages/config` with:
+- [x] T002 [P] Create `packages/config` with:
   - `tsconfig.base.json`: strict, `noUncheckedIndexedAccess`, ES2023, moduleResolution `bundler`.
   - `eslint.config.js`: flat config with typescript-eslint and react-hooks.
   - `prettier.config.js`.
   - A `package.json` exporting all three.
-- [ ] T003 [P] Scaffold `packages/shared` with `package.json` (name `@kora/shared`, tsup build to ESM+CJS, `exports` map), `tsconfig.json` extending `@kora/config`, and `src/index.ts`. Add dependencies `zod`, `fractional-indexing`.
-- [ ] T004 [P] Scaffold the NestJS 11 app in `apps/api`:
+- [x] T003 [P] Scaffold `packages/shared` with `package.json` (name `@kora/shared`, tsup build to ESM+CJS, `exports` map), `tsconfig.json` extending `@kora/config`, and `src/index.ts`. Add dependencies `zod`, `fractional-indexing`.
+- [x] T004 [P] Scaffold the NestJS 11 app in `apps/api`:
   - Entrypoint `src/main.ts`: Express adapter, `cookie-parser`, global prefix `api/v1` (`/healthz` excluded), listens on `PORT` (default 3000).
   - Also create `src/app.module.ts`, `nest-cli.json` with the SWC builder, `tsconfig.json`, and a `package.json` that depends on `@kora/shared` via `workspace:*`.
-- [ ] T005 [P] Scaffold the React 19 + Vite SPA in `apps/web` using `@tanstack/react-router` with the file-based route plugin. Create `src/main.tsx`, `src/routes/__root.tsx`, `vite.config.ts`, `index.html` and `tsconfig.json`, and depend on `@kora/shared` via `workspace:*`.
-- [ ] T006 [P] Configure Tailwind CSS v4 and initialize shadcn/ui in `apps/web` (`components.json`, `src/styles/globals.css`):
+- [x] T005 [P] Scaffold the React 19 + Vite SPA in `apps/web` using `@tanstack/react-router` with the file-based route plugin. Create `src/main.tsx`, `src/routes/__root.tsx`, `vite.config.ts`, `index.html` and `tsconfig.json`, and depend on `@kora/shared` via `workspace:*`.
+- [x] T006 [P] Configure Tailwind CSS v4 and initialize shadcn/ui in `apps/web` (`components.json`, `src/styles/globals.css`):
   - Theme tokens as CSS variables, with both `:root` and `.dark` palettes.
   - The 12 label color tokens: `red, orange, amber, yellow, lime, green, teal, cyan, blue, indigo, purple, pink`.
-- [ ] T007 [P] Create `infra/docker-compose.dev.yml` with these services:
+- [x] T007 [P] Create `infra/docker-compose.dev.yml` with these services:
   - `postgres:17` on 5432, with a volume.
   - `redis:7` on 6379.
   - `axllent/mailpit` on 8025/1025.
   - Optional `minio` under the `profiles: [minio]` profile.
-- [ ] T008 [P] Create `.env.example` at the repo root with these variables:
+- [x] T008 [P] Create `.env.example` at the repo root with these variables:
   - `DATABASE_URL`, `REDIS_URL`, `APP_URL`, `API_URL`, `SESSION_SECRET`, `ENCRYPTION_KEY` (32-byte base64)
   - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `S3_ENDPOINT` (override for MinIO)
   - `RESEND_API_KEY`, `MAIL_FROM`
   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
   - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
   - Placeholders for P4 integrations: `SLACK_*`, `GITHUB_APP_*`, `GITLAB_WEBHOOK_SECRET`
-- [ ] T009 [P] Configure Vitest:
+- [x] T009 [P] Configure Vitest:
   - `apps/api/vitest.config.ts`: `unplugin-swc` for decorators, test globs `src/**/*.spec.ts` and `test/**/*.spec.ts`.
   - `apps/web/vitest.config.ts`: jsdom, `@testing-library/react`.
   - `packages/shared/vitest.config.ts`.
-- [ ] T010 [P] Create the Playwright package `e2e/`:
+- [x] T010 [P] Create the Playwright package `e2e/`:
   - `package.json` and `playwright.config.ts`.
   - `webServer` runs `pnpm dev`, `baseURL` is `http://localhost:5173`.
   - Projects: chromium, firefox, webkit.
   - Add a `fixtures.ts` stub.
-- [ ] T011 [P] Create the GitHub Actions workflow `.github/workflows/ci.yml`:
+- [x] T011 [P] Create the GitHub Actions workflow `.github/workflows/ci.yml`:
   - Service containers: postgres 17 and redis 7.
   - Steps: `pnpm install --frozen-lockfile`, lint, typecheck, test, `i18n:check`, Playwright e2e on chromium.
-- [ ] T012 Configure the dev proxy in `apps/web/vite.config.ts`: `/api` and `/rt` (with `ws: true`) forward to `http://localhost:3000`, so cookies are same-origin in development.
+- [x] T012 Configure the dev proxy in `apps/web/vite.config.ts`: `/api` and `/rt` (with `ws: true`) forward to `http://localhost:3000`, so cookies are same-origin in development.
 
 ---
 
