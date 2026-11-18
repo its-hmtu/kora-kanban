@@ -6,6 +6,8 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';
 import { configureApp } from './app.setup';
+import { APP_CONFIG } from './infra/config/config.module';
+import { closeHarness, getPrisma } from '../test/setup/test-app';
 
 @Controller('ping')
 class PingController {
@@ -41,6 +43,7 @@ describe('AppModule bootstrap', () => {
   let app: NestExpressApplication;
 
   beforeAll(async () => {
+    await getPrisma(); // sets the harness env that ConfigModule validates at boot
     const moduleRef = await Test.createTestingModule({ imports: [TestAppModule] }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     configureApp(app);
@@ -49,6 +52,12 @@ describe('AppModule bootstrap', () => {
 
   afterAll(async () => {
     await app.close();
+    await closeHarness();
+  });
+
+  it('provides the validated APP_CONFIG (main.ts reads TRUST_PROXY from it)', () => {
+    const config = app.get<{ TRUST_PROXY: number }>(APP_CONFIG);
+    expect(config.TRUST_PROXY).toBe(0);
   });
 
   it('returns a JSON 404 for unknown routes under api/v1', async () => {
