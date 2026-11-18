@@ -62,6 +62,14 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...valid, ENCRYPTION_KEY: '' })).toThrow(/ENCRYPTION_KEY/);
   });
 
+  it('rejects ENCRYPTION_KEY that is not strict base64 even if it decodes to 32 bytes', () => {
+    // Node's lenient decoder skips invalid characters, so these would decode to 32 bytes.
+    expect(() => loadEnv({ ...valid, ENCRYPTION_KEY: `${KEY}!!` })).toThrow(/ENCRYPTION_KEY/);
+    expect(() => loadEnv({ ...valid, ENCRYPTION_KEY: ` ${KEY}` })).toThrow(/ENCRYPTION_KEY/);
+    const urlSafe = Buffer.alloc(32, 0xfb).toString('base64url');
+    expect(() => loadEnv({ ...valid, ENCRYPTION_KEY: urlSafe })).toThrow(/ENCRYPTION_KEY/);
+  });
+
   it('rejects invalid NODE_ENV and PORT', () => {
     expect(() => loadEnv({ ...valid, NODE_ENV: 'staging' })).toThrow(/NODE_ENV/);
     expect(() => loadEnv({ ...valid, PORT: 'abc' })).toThrow(/PORT/);

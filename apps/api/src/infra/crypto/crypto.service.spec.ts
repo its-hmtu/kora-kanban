@@ -21,6 +21,19 @@ describe('CryptoService', () => {
     expect(Buffer.from(svc.randomToken(16), 'base64url')).toHaveLength(16);
   });
 
+  it('randomToken: rejects fewer than 16 bytes and non-integers', () => {
+    expect(() => svc.randomToken(15)).toThrow(/at least 16/);
+    expect(() => svc.randomToken(0)).toThrow(/at least 16/);
+    expect(() => svc.randomToken(16.5)).toThrow(/integer/);
+    expect(() => svc.randomToken(Number.NaN)).toThrow(/integer/);
+  });
+
+  it('constructor rejects a key that does not decode to 32 bytes', () => {
+    expect(
+      () => new CryptoService({ ENCRYPTION_KEY: Buffer.alloc(16).toString('base64') } as Env),
+    ).toThrow(/32 bytes/);
+  });
+
   it('sha256: known vector, hex', () => {
     expect(svc.sha256('abc')).toBe(
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',

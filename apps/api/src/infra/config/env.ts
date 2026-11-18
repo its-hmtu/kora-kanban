@@ -11,9 +11,13 @@ const withDefault = <T extends z.ZodType>(schema: T, value: NonNullable<z.output
 const url = z.url();
 const text = z.string().min(1);
 
-const encryptionKey = z.string().refine((v) => Buffer.from(v, 'base64').length === 32, {
-  message: 'must be base64 encoding of exactly 32 bytes',
-});
+// Strict standard base64 (Node's decoder silently skips invalid characters, so check the alphabet).
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const encryptionKey = z
+  .string()
+  .refine((v) => BASE64.test(v) && Buffer.from(v, 'base64').length === 32, {
+    message: 'must be base64 encoding of exactly 32 bytes',
+  });
 
 export const envSchema = z.object({
   NODE_ENV: withDefault(z.enum(['development', 'test', 'production']), 'development'),

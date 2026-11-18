@@ -11,6 +11,8 @@ import type { Env } from '../config/env';
 
 const IV_BYTES = 12; // recommended for GCM
 const TAG_BYTES = 16;
+const KEY_BYTES = 32; // AES-256
+const MIN_TOKEN_BYTES = 16;
 
 @Injectable()
 export class CryptoService {
@@ -18,9 +20,13 @@ export class CryptoService {
 
   constructor(@Inject(APP_CONFIG) config: Env) {
     this.key = Buffer.from(config.ENCRYPTION_KEY, 'base64');
+    if (this.key.length !== KEY_BYTES) throw new Error('ENCRYPTION_KEY must decode to 32 bytes');
   }
 
+  /** Cryptographically random base64url token; never shorter than 16 bytes (128 bits). */
   randomToken(bytes = 32): string {
+    if (!Number.isInteger(bytes)) throw new Error('randomToken: bytes must be an integer');
+    if (bytes < MIN_TOKEN_BYTES) throw new Error('randomToken: bytes must be at least 16');
     return randomBytes(bytes).toString('base64url');
   }
 
