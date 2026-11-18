@@ -1,3 +1,4 @@
+import './load-env';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter, type NestExpressApplication } from '@nestjs/platform-express';
@@ -12,9 +13,14 @@ async function bootstrap(): Promise<void> {
     bufferLogs: true,
   });
   app.useLogger(app.get(Logger));
-  configureApp(app, app.get<Env>(APP_CONFIG));
-  const port = Number.parseInt(process.env.PORT ?? '', 10);
-  await app.listen(Number.isNaN(port) ? 3000 : port);
+  // SIGTERM/SIGINT → onModuleDestroy/onApplicationShutdown, so Prisma and Redis close cleanly.
+  app.enableShutdownHooks();
+  const config = app.get<Env>(APP_CONFIG);
+  configureApp(app, config);
+  await app.listen(config.PORT);
 }
 
-void bootstrap();
+bootstrap().catch((err: unknown) => {
+  console.error('API failed to start', err);
+  process.exit(1);
+});
