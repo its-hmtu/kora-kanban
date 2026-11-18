@@ -1,6 +1,6 @@
 import { ErrorCode } from '@kora/shared';
 import type { Redis } from 'ioredis';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DomainError } from '../../src/common/errors/domain-error';
 import { loadEnv } from '../../src/infra/config/env';
 import { CryptoService } from '../../src/infra/crypto/crypto.service';
@@ -42,6 +42,7 @@ describe('SessionService (real Postgres + Redis)', () => {
     await resetDb();
     now = T0;
   });
+  afterEach(() => vi.restoreAllMocks());
   afterAll(closeHarness);
 
   it('exposes the research A10 constants', () => {
@@ -115,6 +116,51 @@ describe('SessionService (real Postgres + Redis)', () => {
     expect((await svc.validate(token))?.user.id).toBe(user.id);
     await redis.del(cacheKey(token));
     expect(await svc.validate(token)).toBeNull();
+  });
+
+  it('validate: a cache hit does not extend the cache TTL (out-of-band deletes expire within 60 s)', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    await svc.validate(token); // miss -> cached for 60 s
+    await redis.expire(cacheKey(token), 5);
+    await svc.validate(token); // hit
+    expect(await redis.ttl(cacheKey(token))).toBeLessThanOrEqual(5);
+  });
+
+  it('validate: reports refreshed only when it slid the expiry', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    expect((await svc.validate(token))?.refreshed).toBe(false);
+    advance(61 * MINUTE);
+    expect((await svc.validate(token))?.refreshed).toBe(true);
+    expect((await svc.validate(token))?.refreshed).toBe(false);
+  });
+
+  it('validate: a revoke landing between the DB read and the cache write is not re-cached', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    const realSet = redis.set.bind(redis);
+    vi.spyOn(redis, 'set').mockImplementationOnce((async (...args: unknown[]) => {
+      await svc.revoke(token); // concurrent sign-out completes first
+      return (realSet as (...a: unknown[]) => Promise<unknown>)(...args);
+    }) as never);
+    expect(await svc.validate(token)).toBeNull();
+    expect(await redis.exists(cacheKey(token))).toBe(0);
+    expect(await svc.validate(token)).toBeNull();
+  });
+
+  it('validate: a revoke landing during the slide is not re-cached', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    await svc.validate(token); // cached
+    advance(61 * MINUTE);
+    const realSet = redis.set.bind(redis);
+    vi.spyOn(redis, 'set').mockImplementationOnce((async (...args: unknown[]) => {
+      await svc.revoke(token);
+      return (realSet as (...a: unknown[]) => Promise<unknown>)(...args);
+    }) as never);
+    expect(await svc.validate(token)).toBeNull();
+    expect(await redis.exists(cacheKey(token))).toBe(0);
   });
 
   it('validate: unknown, empty or over-long tokens are rejected', async () => {
@@ -207,6 +253,26 @@ describe('SessionService (real Postgres + Redis)', () => {
     expect(await svc.validate(a1)).toBeNull();
     expect(await svc.validate(a2)).toBeNull();
     expect((await svc.validate(b1))?.user.id).toBe(bob.id);
+  });
+
+  it('revokeAllForUser: a session validated concurrently with the revocation keeps no cache key', async () => {
+    const alice = await createUser();
+    await svc.create(alice.id, req);
+    let late = '';
+    const realFindMany = prisma.client.session.findMany.bind(prisma.client.session);
+    vi.spyOn(prisma.client.session, 'findMany').mockImplementationOnce((async (args: never) => {
+      const rows = await realFindMany(args);
+      late = await svc.create(alice.id, req); // signs in on another device mid-revocation
+      await svc.validate(late);
+      return rows;
+    }) as never);
+
+    await svc.revokeAllForUser(alice.id);
+
+    expect(await prisma.client.session.count({ where: { userId: alice.id } })).toBe(0);
+    const keys = await redis.keys('sess:*');
+    for (const k of keys) expect(JSON.parse((await redis.get(k))!).userId).not.toBe(alice.id);
+    if (late) expect(await svc.validate(late)).toBeNull();
   });
 
   it('rotate: issues a new token for the same user and revokes the old one', async () => {

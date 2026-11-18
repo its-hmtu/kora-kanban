@@ -20,7 +20,7 @@ import { AuthModule } from '../../src/modules/auth/auth.module';
 import type { AuthUser } from '../../src/modules/auth/auth.types';
 import { SessionService } from '../../src/modules/auth/session.service';
 import { createUser } from '../setup/factories';
-import { closeHarness, getPrisma, resetDb } from '../setup/test-app';
+import { closeHarness, getPrisma, getRedis, resetDb } from '../setup/test-app';
 
 @Controller('t')
 class ProbeController {
@@ -163,6 +163,30 @@ describe('SessionAuthGuard (real Postgres + Redis)', () => {
 
   it('@Public on a controller class applies to all its routes', async () => {
     await get('/pub').expect(200);
+  });
+
+  it('slides the kora_sid cookie when the session slid (at most once per hour)', async () => {
+    const user = await createUser();
+    const token = await login(user.id);
+    const prisma = await getPrisma();
+    const redis = await getRedis();
+    const setCookie = (res: request.Response) =>
+      ([] as string[]).concat(res.headers['set-cookie'] ?? []);
+
+    expect(setCookie(await get('/t/me', token).expect(200))).toEqual([]);
+
+    // Pretend the last slide was 61 min ago (DB and cache).
+    await prisma.client.session.updateMany({
+      data: { lastSeenAt: new Date(Date.now() - 61 * 60_000) },
+    });
+    await redis.flushdb();
+    const slid = setCookie(await get('/t/me', token).expect(200));
+    expect(slid).toHaveLength(1);
+    expect(slid[0]).toMatch(new RegExp(`^kora_sid=${token};`));
+    expect(slid[0]).toContain('Max-Age=2592000');
+    expect(slid[0]).toContain('HttpOnly');
+
+    expect(setCookie(await get('/t/me', token).expect(200))).toEqual([]);
   });
 
   it('logout revokes the session and clears the cookie', async () => {

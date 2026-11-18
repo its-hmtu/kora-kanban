@@ -23,6 +23,8 @@ export interface SessionInfo {
 export interface AuthContext {
   session: SessionInfo;
   user: AuthUser;
+  /** True when this validation slid the expiry, so the cookie should be re-issued. */
+  refreshed: boolean;
 }
 
 // Express's Request extends the global `Express.Request`, so this types `req.user`/`req.session`.

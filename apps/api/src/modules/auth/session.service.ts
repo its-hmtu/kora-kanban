@@ -72,6 +72,7 @@ export class SessionService {
     const now = this.clock.now();
 
     let session = await this.readCache(hash);
+    const fromCache = session !== null;
     if (!session) {
       const row = await this.prisma.client.session.findUnique({
         where: { tokenHash: hash },
@@ -95,25 +96,35 @@ export class SessionService {
       return null;
     }
 
-    if (now.getTime() - session.lastSeenAt.getTime() >= SESSION_SLIDE_INTERVAL_MS) {
+    const refreshed = now.getTime() - session.lastSeenAt.getTime() >= SESSION_SLIDE_INTERVAL_MS;
+    if (refreshed) {
       session = {
         ...session,
         lastSeenAt: now,
         expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
       };
-      const { count } = await this.prisma.client.session.updateMany({
+      await this.prisma.client.session.updateMany({
         where: { id: session.id },
         data: { lastSeenAt: session.lastSeenAt, expiresAt: session.expiresAt },
       });
-      if (count === 0) {
-        // Revoked concurrently.
+    }
+
+    // Only (re)cache after a DB read or a slide: a plain hit must not extend the 60 s TTL, so an
+    // out-of-band delete is honoured within 60 s.
+    if (!fromCache || refreshed) {
+      await this.writeCache(hash, session);
+      // A revoke may have landed between our read and the cache write; re-check so it isn't
+      // resurrected by the entry we just wrote.
+      const stillExists = await this.prisma.client.session.findUnique({
+        where: { tokenHash: hash },
+        select: { id: true },
+      });
+      if (!stillExists) {
         await this.redis.del(this.cacheKey(hash));
         return null;
       }
     }
-
-    await this.writeCache(hash, session);
-    return { session, user };
+    return { session, user, refreshed };
   }
 
   /** Signs out one session. Unknown tokens are ignored. */
@@ -124,11 +135,9 @@ export class SessionService {
 
   /** "Sign out all devices": deletes every session of the user and their cache entries. */
   async revokeAllForUser(userId: string): Promise<void> {
-    const rows = await this.prisma.client.session.findMany({
-      where: { userId },
-      select: { tokenHash: true },
-    });
-    await this.prisma.client.session.deleteMany({ where: { userId } });
+    // Delete and collect atomically so a session created mid-revocation can't keep a cache key.
+    const rows = await this.prisma.client.$queryRaw<{ tokenHash: string }[]>`
+      DELETE FROM "Session" WHERE "userId" = ${userId}::uuid RETURNING "tokenHash"`;
     if (rows.length) await this.redis.del(...rows.map((r) => this.cacheKey(r.tokenHash)));
   }
 
