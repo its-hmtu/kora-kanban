@@ -10,7 +10,7 @@ import { ApiExceptionFilter } from '../../src/common/filters/api-exception.filte
 import { ConfigModule } from '../../src/infra/config/config.module';
 import { RedisModule } from '../../src/infra/redis/redis.module';
 import { KoraThrottlerModule } from '../../src/infra/throttler/throttler.module';
-import { UseThrottler } from '../../src/infra/throttler/use-throttler.decorator';
+import { ApiTokenThrottle, AuthThrottle } from '../../src/infra/throttler/use-throttler.decorator';
 import { closeHarness, getPrisma, resetDb } from '../setup/test-app';
 
 @Controller('t')
@@ -21,13 +21,13 @@ class ProbeController {
   }
 
   @Post('login')
-  @UseThrottler('auth')
+  @AuthThrottle()
   login() {
     return { ok: true };
   }
 
   @Get('token')
-  @UseThrottler('api-token')
+  @ApiTokenThrottle()
   token() {
     return { ok: true };
   }
@@ -79,6 +79,19 @@ describe('rate limiting', () => {
     for (let i = 0; i < 5; i++) await login('b@example.com').expect(201);
     await login('b@EXAMPLE.com').expect(429);
     await login('other@example.com').expect(201);
+  });
+
+  it('caps auth at 30 requests per minute per IP regardless of email, then 429 with Retry-After', async () => {
+    for (let i = 0; i < 30; i++) await login(`user${i}@example.com`).expect(201);
+    const res = await login('user-new@example.com').expect(429);
+    expect(res.body.error.code).toBe(ErrorCode.RATE_LIMITED);
+    expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('still limits one email to 10 while the per-IP cap has room', async () => {
+    for (let i = 0; i < 10; i++) await login('same@example.com').expect(201);
+    await login('same@example.com').expect(429);
+    await login('fresh@example.com').expect(201);
   });
 
   it('allows 100 api-token requests per minute, then 429 with Retry-After', async () => {

@@ -22,6 +22,8 @@ const encryptionKey = z
 export const envSchema = z.object({
   NODE_ENV: withDefault(z.enum(['development', 'test', 'production']), 'development'),
   PORT: withDefault(z.coerce.number().int().min(1).max(65535), 3000),
+  // Reverse-proxy hops to trust for the client IP (X-Forwarded-For); 0 = off. Drives rate-limit keys.
+  TRUST_PROXY: withDefault(z.coerce.number().int().min(0), 0),
 
   // Core
   DATABASE_URL: required(url),

@@ -21,6 +21,14 @@ describe('loadEnv', () => {
     expect(env.SMTP_URL).toBe('smtp://localhost:1025');
   });
 
+  it('defaults TRUST_PROXY to 0 and accepts non-negative integers only', () => {
+    expect(loadEnv(valid).TRUST_PROXY).toBe(0);
+    expect(loadEnv({ ...valid, TRUST_PROXY: '2' }).TRUST_PROXY).toBe(2);
+    for (const bad of ['-1', '1.5', 'abc']) {
+      expect(() => loadEnv({ ...valid, TRUST_PROXY: bad })).toThrow(/TRUST_PROXY/);
+    }
+  });
+
   it('coerces PORT and accepts NODE_ENV values', () => {
     const env = loadEnv({ ...valid, PORT: '4000', NODE_ENV: 'production' });
     expect(env.PORT).toBe(4000);

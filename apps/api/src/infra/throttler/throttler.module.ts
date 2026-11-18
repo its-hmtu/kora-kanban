@@ -32,6 +32,11 @@ export function authTracker(req: TrackedRequest): string {
   return `${req.ip ?? 'unknown'}|${normalized}`;
 }
 
+/** `auth-ip` bucket: client IP only, so rotating emails cannot dodge the cap. */
+export function ipTracker(req: TrackedRequest): string {
+  return req.ip ?? 'unknown';
+}
+
 /** `api-token` bucket: token id. Stub: falls back to the client IP until P4 introduces tokens. */
 export function apiTokenTracker(req: TrackedRequest): string {
   return req.apiToken?.id ?? req.ip ?? 'unknown';
@@ -39,7 +44,7 @@ export function apiTokenTracker(req: TrackedRequest): string {
 
 /**
  * Redis-backed rate limiting. The guard is global but every named throttler is skipped unless the
- * route opts in with `@UseThrottler('auth' | 'api-token')`, so default routes stay unthrottled.
+ * route opts in with `@AuthThrottle()` / `@ApiTokenThrottle()`, so default routes stay unthrottled.
  */
 @Module({
   imports: [
@@ -54,6 +59,13 @@ export function apiTokenTracker(req: TrackedRequest): string {
             limit: 10,
             getTracker: authTracker,
             skipIf: notRequested('auth'),
+          },
+          {
+            name: 'auth-ip',
+            ttl: MINUTE_MS,
+            limit: 30,
+            getTracker: ipTracker,
+            skipIf: notRequested('auth-ip'),
           },
           {
             name: 'api-token',
