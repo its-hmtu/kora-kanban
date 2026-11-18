@@ -1,6 +1,12 @@
 import { ErrorCode } from '@kora/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiFetch, resetApiClient, setLanguageGetter } from './api-client';
+import {
+  ApiError,
+  apiFetch,
+  __resetApiClientForTests,
+  resetCsrfToken,
+  setLanguageGetter,
+} from './api-client';
 
 type Handler = (url: string, init: RequestInit) => Response | Promise<Response>;
 
@@ -22,7 +28,7 @@ const callsTo = (suffix: string) =>
   fetchMock.mock.calls.filter(([u]) => String(u).endsWith(suffix));
 
 beforeEach(() => {
-  resetApiClient();
+  __resetApiClientForTests();
   assign = vi.fn();
   vi.stubGlobal('location', { pathname: '/boards/1', search: '?x=1', assign });
 });
@@ -165,6 +171,23 @@ describe('apiFetch', () => {
       mockFetch(() => json(envelope(ErrorCode.FORBIDDEN), 403));
       await expect(apiFetch('/boards/1')).rejects.toMatchObject({ status: 403 });
       expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('resetCsrfToken', () => {
+    it('drops the cached token but keeps the language getter', async () => {
+      setLanguageGetter(() => 'vi');
+      let tokens = 0;
+      mockFetch((url) =>
+        url.endsWith('/auth/csrf') ? json({ csrfToken: `t${++tokens}` }) : json({}),
+      );
+      await apiFetch('/cards', { method: 'POST' });
+      resetCsrfToken();
+      await apiFetch('/cards', { method: 'POST' });
+      expect(callsTo('/auth/csrf')).toHaveLength(2);
+      const last = callsTo('/cards')[1]![1] as RequestInit;
+      expect(headersOf(last).get('X-CSRF-Token')).toBe('t2');
+      expect(headersOf(last).get('Accept-Language')).toBe('vi');
     });
   });
 });

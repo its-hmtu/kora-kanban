@@ -25,7 +25,7 @@ export interface ApiFetchOptions {
   redirectOn401?: boolean;
 }
 
-// Single seam for the language header; i18n (P2-13) can register `() => i18n.language`.
+// Single seam for the language header; i18n registers `() => i18n.language`.
 let getLanguage: (() => string) | undefined;
 export function setLanguageGetter(fn: (() => string) | undefined): void {
   getLanguage = fn;
@@ -47,8 +47,13 @@ function loadCsrfToken(): Promise<string> {
   return csrfToken;
 }
 
-/** Clears cached client state (CSRF token, language getter). Used on logout and in tests. */
-export function resetApiClient(): void {
+/** Clears the cached CSRF token (logout: the next mutation fetches a token for the new session). */
+export function resetCsrfToken(): void {
+  csrfToken = undefined;
+}
+
+/** Test-only: clears all module state, including the language getter. */
+export function __resetApiClientForTests(): void {
   csrfToken = undefined;
   getLanguage = undefined;
 }
