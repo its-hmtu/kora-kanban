@@ -1,0 +1,52 @@
+// Identity & access (data-model.md §1). Only User and Session so far.
+// `name` (1-100 chars) is enforced by a CHECK constraint added by hand in the init_identity migration
+// (Prisma cannot express CHECK constraints); the Zod schema in @kora/shared validates it at the API edge.
+
+// DB enum values are identifier-safe; `zh_CN` is stored in Postgres and maps to the app-level
+// locale `zh-CN` (a mapping helper will be added where first needed).
+enum Locale {
+  en
+  es
+  fr
+  de
+  zh_CN
+  vi
+}
+
+enum Theme {
+  light
+  dark
+  system
+}
+
+model User {
+  id              String    @id @db.Uuid // uuid v7, assigned by PrismaService client extension
+  email           String    @unique @db.Citext
+  emailVerifiedAt DateTime? @db.Timestamptz(3)
+  passwordHash    String?
+  name            String
+  avatarUrl       String?
+  locale          Locale    @default(en)
+  theme           Theme     @default(system)
+  timezone        String    @default("UTC")
+  deletedAt       DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  sessions Session[]
+}
+
+model Session {
+  id         String   @id @db.Uuid
+  userId     String   @db.Uuid
+  tokenHash  String   @unique
+  expiresAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
