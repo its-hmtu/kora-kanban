@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Params } from 'nestjs-pino';
 
 /**
- * JSON logs everywhere except development (pretty) and test (silent). Takes NODE_ENV as a
- * parameter because ConfigModule is not wired into AppModule yet (T037).
+ * JSON logs everywhere except development (pretty) and test (silent). Modules pass NODE_ENV from
+ * `APP_CONFIG` (`LoggerModule.forRootAsync`).
  */
 export function buildLoggerParams(
   nodeEnv: string | undefined,

@@ -5,10 +5,10 @@ import { closeHarness, getPrisma, getRedis, resetDb } from '../setup/test-app';
 
 const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-describe('integration harness', () => {
-  beforeEach(resetDb);
-  afterAll(closeHarness);
+beforeEach(resetDb);
+afterAll(closeHarness);
 
+describe('integration harness', () => {
   it('createUser persists a user visible through the real client', async () => {
     const user = await createUser({ name: 'Ada' });
     const prisma = await getPrisma();
@@ -48,9 +48,6 @@ describe('integration harness', () => {
 });
 
 describe('uuid v7 ids via the real client', () => {
-  beforeEach(resetDb);
-  afterAll(closeHarness);
-
   it('create returns a uuid v7 id', async () => {
     const user = await createUser();
     expect(user.id).toMatch(V7);

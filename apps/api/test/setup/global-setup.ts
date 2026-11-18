@@ -4,8 +4,7 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer } from '@testcontainers/redis';
 import { Client } from 'pg';
 import type { TestProject } from 'vitest/node' with { 'resolution-mode': 'import' };
-
-export const TEMPLATE_DB = 'kora_template';
+import { TEMPLATE_DB } from './constants';
 
 export interface HarnessContext {
   /** Admin connection URL (database `postgres`); workers create their own database from the template. */

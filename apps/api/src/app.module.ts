@@ -1,10 +1,51 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { AccessModule } from './common/access/access.module';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import { CsrfGuard } from './common/guards/csrf.guard';
+import { PermissionGuard } from './common/guards/permission.guard';
+import { SessionAuthGuard } from './common/guards/session-auth.guard';
 import { buildLoggerParams } from './common/logging/logger.config';
-import { ConfigModule } from './infra/config/config.module';
+import { APP_CONFIG, ConfigModule } from './infra/config/config.module';
+import type { Env } from './infra/config/env';
+import { CryptoModule } from './infra/crypto/crypto.module';
+import { MailModule } from './infra/mail/mail.module';
+import { PrismaModule } from './infra/prisma/prisma.module';
+import { QueueModule } from './infra/queue/queue.module';
+import { RedisModule } from './infra/redis/redis.module';
+import { KoraThrottlerModule } from './infra/throttler/throttler.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { HealthModule } from './modules/health/health.module';
 
+/**
+ * Global guards run in registration order: SessionAuthGuard → CsrfGuard → PermissionGuard (the
+ * APP_GUARDs below). Nest registers AppModule's own APP_GUARDs before those of imported modules,
+ * so KoraThrottlerModule's guard runs last: requests rejected by auth/CSRF/permissions never spend
+ * rate-limit budget, and the `api-token` tracker can read the token identity auth attached.
+ */
 @Module({
-  // NODE_ENV is read directly until ConfigModule is wired into AppModule (T037).
-  imports: [ConfigModule, LoggerModule.forRoot(buildLoggerParams(process.env.NODE_ENV))],
+  imports: [
+    ConfigModule,
+    LoggerModule.forRootAsync({
+      inject: [APP_CONFIG],
+      useFactory: (config: Env) => buildLoggerParams(config.NODE_ENV),
+    }),
+    PrismaModule,
+    RedisModule,
+    CryptoModule,
+    QueueModule,
+    MailModule,
+    KoraThrottlerModule,
+    AccessModule,
+    AuthModule,
+    HealthModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: SessionAuthGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
+    { provide: APP_GUARD, useClass: PermissionGuard },
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
+  ],
 })
 export class AppModule {}

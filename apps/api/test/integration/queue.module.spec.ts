@@ -1,8 +1,10 @@
 import { getQueueToken } from '@nestjs/bullmq';
+import type { LoggerService } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { Queue } from 'bullmq';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ConfigModule } from '../../src/infra/config/config.module';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_CONFIG, ConfigModule } from '../../src/infra/config/config.module';
+import { loadEnv } from '../../src/infra/config/env';
 import { QueueModule } from '../../src/infra/queue/queue.module';
 import { QUEUE_NAMES, redisConnectionFromUrl } from '../../src/infra/queue/queues';
 import { closeHarness, getPrisma, getRedis, resetDb } from '../setup/test-app';
@@ -48,6 +50,37 @@ describe('queues', () => {
     // Keys landed in this worker's db (the harness client uses the same REDIS_URL db index).
     for (const name of QUEUE_NAMES) {
       expect(await redis.exists(`bull:${name}:meta`)).toBe(1);
+    }
+  });
+});
+
+describe('queue connection errors', () => {
+  it('are logged through the app logger, never printed raw by BullMQ', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const errors: string[] = [];
+    const logger: LoggerService = {
+      log: () => undefined,
+      warn: () => undefined,
+      error: (message: unknown) => void errors.push(String(message)),
+    };
+    const down = await Test.createTestingModule({ imports: [ConfigModule, QueueModule] })
+      .overrideProvider(APP_CONFIG)
+      .useValue({ ...loadEnv(), REDIS_URL: 'redis://127.0.0.1:1/0' })
+      .compile();
+    down.useLogger(logger);
+    await down.init();
+    try {
+      await vi.waitFor(() => {
+        for (const name of QUEUE_NAMES) {
+          expect(errors.some((e) => e.includes(`"${name}"`) && e.includes('ECONNREFUSED'))).toBe(
+            true,
+          );
+        }
+      });
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      await down.close();
+      consoleError.mockRestore();
     }
   });
 });

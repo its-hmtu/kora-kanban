@@ -1,19 +1,32 @@
+import type { Type } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import { Redis } from 'ioredis';
+import request from 'supertest';
 import { inject } from 'vitest';
+import { AppModule } from '../../src/app.module';
+import { configureApp } from '../../src/app.setup';
+import { CSRF_COOKIE, CSRF_HEADER } from '../../src/common/guards/csrf.guard';
+import { APP_CONFIG } from '../../src/infra/config/config.module';
+import { loadEnv, type Env } from '../../src/infra/config/env';
+import { CryptoService } from '../../src/infra/crypto/crypto.service';
 import { PrismaService } from '../../src/infra/prisma/prisma.service';
-import { loadEnv } from '../../src/infra/config/env';
-import { TEMPLATE_DB } from './global-setup';
+import { SESSION_COOKIE, SessionService } from '../../src/modules/auth/session.service';
+import { TEMPLATE_DB } from './constants';
 
 /**
- * Integration harness (part a of T038). Containers are started once per run by global-setup.ts.
- * Each vitest worker owns a Postgres database cloned from the migrated template and a Redis
- * logical database (index = worker pool id), so files running in parallel are isolated.
- * `createTestApp()` / `agentFor()` (part b) will be added here later.
+ * Integration harness (T038). Containers are started once per run by global-setup.ts. Each vitest
+ * worker owns a Postgres database cloned from the migrated template and a Redis logical database
+ * (index = worker pool id), so files running in parallel are isolated.
+ *
+ * Spec usage: `beforeEach(resetDb)` and one top-level `afterAll(closeHarness)` per file.
  */
 
 const poolId = Number(process.env.VITEST_POOL_ID ?? '1');
 const workerDb = `kora_w${poolId}`;
+/** Supertest always talks to 127.0.0.1, so agent cookies are scoped to that host. */
+const AGENT_HOST = '127.0.0.1';
 
 interface Harness {
   prisma: PrismaService;
@@ -21,6 +34,7 @@ interface Harness {
 }
 
 let harness: Promise<Harness> | undefined;
+let testApp: NestExpressApplication | undefined;
 
 async function createWorkerDatabase(adminUrl: string): Promise<void> {
   const admin = new Client({ connectionString: adminUrl });
@@ -69,6 +83,57 @@ export const getPrisma = async (): Promise<PrismaService> => (await get()).prism
 /** ioredis client connected to this worker's logical Redis database. */
 export const getRedis = async (): Promise<Redis> => (await get()).redis;
 
+export interface CreateTestAppOptions {
+  /** Extra (probe) controllers mounted next to AppModule's own routes. */
+  controllers?: Type[];
+}
+
+/**
+ * Boots the full AppModule (every global module, guard and the exception filter) against this
+ * worker's database and Redis, configured exactly like `main.ts`. One app per spec file;
+ * `closeHarness()` closes it.
+ */
+export async function createTestApp(
+  options: CreateTestAppOptions = {},
+): Promise<NestExpressApplication> {
+  if (testApp) throw new Error('createTestApp() was already called in this file');
+  await get(); // sets the worker env that ConfigModule validates at boot
+  const moduleRef = await Test.createTestingModule({
+    imports: [AppModule],
+    controllers: options.controllers ?? [],
+  }).compile();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
+  configureApp(app, app.get<Env>(APP_CONFIG));
+  await app.init();
+  testApp = app;
+  return app;
+}
+
+/**
+ * A Supertest agent signed in as `user` on the app from `createTestApp()`: a real `kora_sid`
+ * session cookie (SessionService.create), a `kora_csrf` cookie with the matching `X-CSRF-Token`
+ * header, and `Origin` = APP_URL, so state-changing requests pass every global guard. Cookies the
+ * server sets later (e.g. a slid session) are kept by the agent.
+ */
+export async function agentFor(user: { id: string }): Promise<request.Agent> {
+  if (!testApp) throw new Error('Call createTestApp() before agentFor()');
+  const token = await testApp.get(SessionService).create(user.id, {
+    headers: { 'user-agent': 'kora-test' },
+    ip: AGENT_HOST,
+  });
+  const csrfToken = testApp.get(CryptoService).randomToken();
+  const { APP_URL } = testApp.get<Env>(APP_CONFIG);
+
+  const agent = request.agent(testApp.getHttpServer());
+  agent.jar.setCookies(
+    [`${SESSION_COOKIE}=${token}; Path=/`, `${CSRF_COOKIE}=${csrfToken}; Path=/`],
+    AGENT_HOST,
+    '/',
+  );
+  agent.set('Origin', new URL(APP_URL).origin).set(CSRF_HEADER, csrfToken);
+  return agent;
+}
+
 /** Truncates every app table (not `_prisma_migrations`) and flushes this worker's Redis database. */
 export async function resetDb(): Promise<void> {
   const { prisma, redis } = await get();
@@ -82,8 +147,11 @@ export async function resetDb(): Promise<void> {
   await redis.flushdb();
 }
 
-/** Disconnects clients; call from `afterAll` in each spec file. */
+/** Closes the app from `createTestApp()` and disconnects clients; one top-level `afterAll` per file. */
 export async function closeHarness(): Promise<void> {
+  const app = testApp;
+  testApp = undefined;
+  await app?.close();
   if (!harness) return;
   const { prisma, redis } = await harness;
   harness = undefined;

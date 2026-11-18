@@ -1,14 +1,14 @@
-import { Controller, Get, Module, Req } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Controller, Get, Req } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { ErrorCode } from '@kora/shared';
 import type { Request } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AppModule } from './app.module';
-import { configureApp } from './app.setup';
+import { Public } from './common/decorators/public.decorator';
 import { APP_CONFIG } from './infra/config/config.module';
-import { closeHarness, getPrisma } from '../test/setup/test-app';
+import { closeHarness, createTestApp } from '../test/setup/test-app';
 
+@Public()
 @Controller('ping')
 class PingController {
   @Get()
@@ -17,14 +17,7 @@ class PingController {
   }
 }
 
-@Controller('healthz')
-class HealthController {
-  @Get()
-  health() {
-    return { status: 'ok' };
-  }
-}
-
+@Public()
 @Controller('cookie-echo')
 class CookieEchoController {
   @Get()
@@ -33,48 +26,30 @@ class CookieEchoController {
   }
 }
 
-@Module({
-  imports: [AppModule],
-  controllers: [PingController, HealthController, CookieEchoController],
-})
-class TestAppModule {}
-
 describe('AppModule bootstrap', () => {
   let app: NestExpressApplication;
 
   beforeAll(async () => {
-    await getPrisma(); // sets the harness env that ConfigModule validates at boot
-    const moduleRef = await Test.createTestingModule({ imports: [TestAppModule] }).compile();
-    app = moduleRef.createNestApplication<NestExpressApplication>();
-    configureApp(app);
-    await app.init();
+    app = await createTestApp({ controllers: [PingController, CookieEchoController] });
   });
 
-  afterAll(async () => {
-    await app.close();
-    await closeHarness();
-  });
+  afterAll(closeHarness);
 
   it('provides the validated APP_CONFIG (main.ts reads TRUST_PROXY from it)', () => {
     const config = app.get<{ TRUST_PROXY: number }>(APP_CONFIG);
     expect(config.TRUST_PROXY).toBe(0);
   });
 
-  it('returns a JSON 404 for unknown routes under api/v1', async () => {
+  it('returns an ApiError 404 for unknown routes under api/v1', async () => {
     const res = await request(app.getHttpServer()).get('/api/v1/unknown').expect(404);
     expect(res.headers['content-type']).toMatch(/json/);
-    expect(res.body.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: { code: ErrorCode.NOT_FOUND, message: expect.any(String) } });
   });
 
   it('mounts routes under the api/v1 prefix only', async () => {
     const res = await request(app.getHttpServer()).get('/api/v1/ping').expect(200);
     expect(res.body).toEqual({ ok: true });
     await request(app.getHttpServer()).get('/ping').expect(404);
-  });
-
-  it('excludes /healthz from the prefix', async () => {
-    await request(app.getHttpServer()).get('/healthz').expect(200);
-    await request(app.getHttpServer()).get('/api/v1/healthz').expect(404);
   });
 
   it('parses cookies', async () => {

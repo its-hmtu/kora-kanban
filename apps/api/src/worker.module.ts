@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { buildLoggerParams } from './common/logging/logger.config';
-import { ConfigModule } from './infra/config/config.module';
+import { APP_CONFIG, ConfigModule } from './infra/config/config.module';
+import type { Env } from './infra/config/env';
 import { mailWorkerProviders } from './infra/mail/mail-worker.providers';
 import { QueueModule } from './infra/queue/queue.module';
 
@@ -11,8 +12,11 @@ import { QueueModule } from './infra/queue/queue.module';
  */
 @Module({
   imports: [
-    LoggerModule.forRoot(buildLoggerParams(process.env.NODE_ENV)),
     ConfigModule,
+    LoggerModule.forRootAsync({
+      inject: [APP_CONFIG],
+      useFactory: (config: Env) => buildLoggerParams(config.NODE_ENV),
+    }),
     QueueModule,
   ],
   providers: [...mailWorkerProviders],
