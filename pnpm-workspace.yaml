@@ -8,3 +8,9 @@ onlyBuiltDependencies:
   - '@prisma/engines'
   - esbuild
   - prisma
+
+# Optional native accelerators pulled in by testcontainers (ssh2/docker-modem); pure-JS fallbacks work.
+ignoredBuiltDependencies:
+  - cpu-features
+  - protobufjs
+  - ssh2

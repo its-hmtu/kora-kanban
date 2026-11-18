@@ -46,6 +46,24 @@ describe('uuidv7Query', () => {
     expect(query.mock.calls[0]![0].data[0].id).toMatch(V7);
   });
 
+  it('upsert: assigns an id to the create branch only', async () => {
+    const query = vi.fn().mockResolvedValue({});
+    await uuidv7Query.upsert({
+      args: { where: { email: 'a@b.c' }, create: { name: 'Ada' }, update: { name: 'Bob' } },
+      query,
+    });
+    const arg = query.mock.calls[0]![0];
+    expect(arg.create.id).toMatch(V7);
+    expect(arg.update).toEqual({ name: 'Bob' });
+    expect(arg.where).toEqual({ email: 'a@b.c' });
+  });
+
+  it('upsert: respects an explicit id in create', async () => {
+    const query = vi.fn().mockResolvedValue({});
+    await uuidv7Query.upsert({ args: { where: {}, create: { id: 'x' }, update: {} }, query });
+    expect(query.mock.calls[0]![0].create.id).toBe('x');
+  });
+
   it('does not mutate the caller args', async () => {
     const query = vi.fn().mockResolvedValue({});
     const args = { data: { name: 'Ada' } };

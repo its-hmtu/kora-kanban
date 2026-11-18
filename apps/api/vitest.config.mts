@@ -5,6 +5,10 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
+    globalSetup: ['test/setup/global-setup.ts'],
+    // First use of the harness clones a database; allow for slow container/CI machines.
+    hookTimeout: 120_000,
+    testTimeout: 30_000,
     include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
   },
   // swcrc: false so the build-only .swcrc (which excludes specs) is not applied to tests.

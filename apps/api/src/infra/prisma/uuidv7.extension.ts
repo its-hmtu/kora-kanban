@@ -18,15 +18,26 @@ const assignIds: Handler = ({ args, query }) => {
   return query({ ...args, data: withIds(args.data) });
 };
 
+type UpsertArgs = { where: unknown; create: unknown; update: unknown };
+const assignUpsertId = ({
+  args,
+  query,
+}: {
+  args: UpsertArgs;
+  query: (args: UpsertArgs) => Promise<unknown>;
+}) => query({ ...args, create: withId(args.create as WithOptionalId) });
+
 /**
- * Query-layer handlers that fill in a uuid v7 `id` for top-level creates when the caller gave none
- * (data-model.md: all ids are UUIDv7). Nested creates (relation writes) are not covered; pass `id`
+ * Query-layer handlers that fill in a uuid v7 `id` for top-level creates (and the create branch of
+ * upsert) when the caller gave none (data-model.md: all ids are UUIDv7). Nested creates and
+ * connectOrCreate (relation writes) are not covered; pass `id`
  * explicitly there.
  */
 export const uuidv7Query = {
   create: assignIds,
   createMany: assignIds,
   createManyAndReturn: assignIds,
+  upsert: assignUpsertId,
 };
 
 export const uuidv7Extension = Prisma.defineExtension({
