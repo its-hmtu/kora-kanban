@@ -1,3 +1,8 @@
+// Supported key forms (anything else is invisible to the extractor, or misattributed):
+//   - at most ONE `useTranslation('ns')` per file, with a literal namespace; its namespace
+//     applies to every unprefixed key in that file (no `useTranslation()` => `common`);
+//   - `t('key')`, `t('ns:key')` with string-literal keys; `i18nKey="key"` / `i18nKey={'key'}`.
+// Not supported: `useTranslation(['a', 'b'])`, `t(key, { ns })`, dynamic keys. Use `t('ns:key')`.
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { checkI18n } from './i18n-check/lib';

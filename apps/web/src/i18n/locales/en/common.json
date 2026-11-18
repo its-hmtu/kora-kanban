@@ -1,1 +1,4 @@
-{ "app": { "name": "Kora" } }
+{
+  "app": { "name": "Kora" },
+  "shell": { "sidebarPlaceholder": "Workspaces and boards will appear here." }
+}

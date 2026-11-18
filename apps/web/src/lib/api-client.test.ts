@@ -135,6 +135,13 @@ describe('apiFetch', () => {
       await expect(apiFetch('/auth/login', { method: 'POST' })).rejects.toBeInstanceOf(ApiError);
       expect(assign).not.toHaveBeenCalled();
     });
+
+    it('redirects from paths that merely start with /login', async () => {
+      vi.stubGlobal('location', { pathname: '/login-help', search: '', assign });
+      mockFetch(() => json(envelope(ErrorCode.UNAUTHENTICATED), 401));
+      await expect(apiFetch('/me')).rejects.toBeInstanceOf(ApiError);
+      expect(assign).toHaveBeenCalledWith(`/login?next=${encodeURIComponent('/login-help')}`);
+    });
   });
 
   describe('403 on mutation (CSRF vs permission share FORBIDDEN)', () => {

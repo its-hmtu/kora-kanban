@@ -78,7 +78,7 @@ function buildUrl(path: string, query: ApiFetchOptions['query']): string {
 
 function redirectToLogin(): void {
   const { pathname, search } = window.location;
-  if (pathname.startsWith('/login')) return; // a failed login attempt is also a 401
+  if (pathname === '/login' || pathname.startsWith('/login/')) return; // a failed login attempt is also a 401
   window.location.assign(`/login?next=${encodeURIComponent(pathname + search)}`);
 }
 
