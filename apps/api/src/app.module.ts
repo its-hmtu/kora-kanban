@@ -17,6 +17,15 @@ import { RedisModule } from './infra/redis/redis.module';
 import { KoraThrottlerModule } from './infra/throttler/throttler.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { TestResetModule } from './modules/health/test-reset.module';
+
+/**
+ * Test-only modules (`POST /api/v1/__test/reset` for e2e). Decided when this file is first
+ * evaluated, from the raw NODE_ENV: entrypoints import `load-env` before AppModule, so `.env` is
+ * already applied, and an unset NODE_ENV (config default `development`) leaves them out. Outside
+ * NODE_ENV=test the routes are never registered at all.
+ */
+const TEST_ONLY_MODULES = process.env.NODE_ENV === 'test' ? [TestResetModule] : [];
 
 /**
  * Global guards run in registration order: SessionAuthGuard → CsrfGuard → PermissionGuard (the
@@ -40,6 +49,7 @@ import { HealthModule } from './modules/health/health.module';
     AccessModule,
     AuthModule,
     HealthModule,
+    ...TEST_ONLY_MODULES,
   ],
   providers: [
     { provide: APP_GUARD, useClass: SessionAuthGuard },

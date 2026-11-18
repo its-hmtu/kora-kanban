@@ -13,6 +13,7 @@ import { loadEnv, type Env } from '../../src/infra/config/env';
 import { CryptoService } from '../../src/infra/crypto/crypto.service';
 import { PrismaService } from '../../src/infra/prisma/prisma.service';
 import { SESSION_COOKIE, SessionService } from '../../src/modules/auth/session.service';
+import { resetAppData } from '../../src/modules/health/reset-app-data';
 import { TEMPLATE_DB } from './constants';
 
 /**
@@ -137,14 +138,7 @@ export async function agentFor(user: { id: string }): Promise<request.Agent> {
 /** Truncates every app table (not `_prisma_migrations`) and flushes this worker's Redis database. */
 export async function resetDb(): Promise<void> {
   const { prisma, redis } = await get();
-  const tables = await prisma.client.$queryRaw<{ tablename: string }[]>`
-    SELECT tablename FROM pg_tables
-    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
-  if (tables.length) {
-    const list = tables.map((t) => `"public"."${t.tablename}"`).join(', ');
-    await prisma.client.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
-  }
-  await redis.flushdb();
+  await resetAppData(prisma, redis);
 }
 
 /** Closes the app from `createTestApp()` and disconnects clients; one top-level `afterAll` per file. */
