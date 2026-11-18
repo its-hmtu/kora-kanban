@@ -5,6 +5,7 @@ import type { Request } from 'express';
 import { APP_CONFIG } from '../../infra/config/config.module';
 import type { Env } from '../../infra/config/env';
 import { CryptoService } from '../../infra/crypto/crypto.service';
+import { SESSION_COOKIE } from '../../modules/auth/session.service';
 import { SKIP_CSRF_KEY } from '../decorators/skip-csrf.decorator';
 import { DomainError } from '../errors/domain-error';
 
@@ -19,8 +20,8 @@ const BEARER = /^bearer\s+\S/i;
  * Global CSRF guard (research B3; registered as APP_GUARD after SessionAuthGuard in T037).
  * Every non-GET/HEAD/OPTIONS request — `@Public()` ones such as login and register included —
  * must carry `Origin` equal to APP_URL's origin and an `X-CSRF-Token` header equal to the
- * `kora_csrf` cookie (double submit). Exempt: Bearer-token requests (no ambient browser
- * credential) and `@SkipCsrf()` routes. Independent of `req.user`. Failures → 403 FORBIDDEN.
+ * `kora_csrf` cookie (double submit). Exempt: Bearer-token requests carrying no `kora_sid`
+ * cookie, and `@SkipCsrf()` routes. Independent of `req.user`. Failures → 403 FORBIDDEN.
  */
 @Injectable()
 export class CsrfGuard implements CanActivate {
@@ -44,8 +45,16 @@ export class CsrfGuard implements CanActivate {
     ]);
     if (skip) return true;
 
+    // Bearer exemption: only when no `kora_sid` cookie rides along. A cross-site request can't
+    // set Authorization without a CORS preflight, but if it did, a cookie session must still be
+    // CSRF-checked. Uses cookie presence, not req.user, so it is independent of guard order.
+    // P4 follow-up: SessionAuthGuard must ignore cookies when a Bearer header is present.
     const authorization = req.headers.authorization;
-    if (typeof authorization === 'string' && BEARER.test(authorization)) return true;
+    const sessionCookie: unknown = req.cookies?.[SESSION_COOKIE];
+    const hasSessionCookie = typeof sessionCookie === 'string' && sessionCookie !== '';
+    if (typeof authorization === 'string' && BEARER.test(authorization) && !hasSessionCookie) {
+      return true;
+    }
 
     if (req.headers.origin !== this.appOrigin) throw new DomainError(ErrorCode.FORBIDDEN, 403);
 

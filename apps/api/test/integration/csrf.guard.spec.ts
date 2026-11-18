@@ -254,6 +254,17 @@ describe('CsrfGuard + GET /auth/csrf (guards in order SessionAuth → Csrf)', ()
       await http().post('/api/v1/t/hook').expect(201);
     });
 
+    it('Bearer header alongside a kora_sid session cookie does NOT skip CSRF → 403', async () => {
+      const user = await createUser();
+      const sid = await sessions.create(user.id, { headers: {}, ip: '127.0.0.1' });
+      const res = await http()
+        .post('/api/v1/t/write')
+        .set('Authorization', 'Bearer x')
+        .set('Cookie', `kora_sid=${sid}`)
+        .expect(403);
+      expect(res.body).toEqual(FORBIDDEN);
+    });
+
     it('Bearer-authenticated request skips CSRF (no Origin, no token)', async () => {
       await http()
         .post('/api/v1/t/login')
