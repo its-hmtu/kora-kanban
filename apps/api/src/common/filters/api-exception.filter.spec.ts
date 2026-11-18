@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Post,
   HttpException,
   NotFoundException,
   PayloadTooLargeException,
@@ -60,6 +61,10 @@ class BoomController {
   teapot() {
     throw new HttpException('secret detail', 418);
   }
+  @Post('body')
+  body() {
+    return { ok: true };
+  }
   @Get('unknown')
   unknown() {
     throw new Error('db password is hunter2');
@@ -112,6 +117,15 @@ describe('ApiExceptionFilter', () => {
     const res = await get('/boom/teapot').expect(418);
     expect(res.body).toEqual({ error: { code: 'INTERNAL', message: en.INTERNAL } });
     expect(JSON.stringify(res.body)).not.toContain('secret detail');
+  });
+
+  it('maps a malformed JSON body to 400 VALIDATION without parser internals', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/boom/body')
+      .set('Content-Type', 'application/json')
+      .send('{bad json')
+      .expect(400);
+    expect(res.body).toEqual({ error: { code: 'VALIDATION', message: en.VALIDATION } });
   });
 
   it('maps a framework 404 for an unknown route to NOT_FOUND', async () => {

@@ -17,7 +17,12 @@ export function buildLoggerParams(
         return (Array.isArray(header) ? header[0] : header) || randomUUID();
       },
       redact: {
-        paths: ['req.headers.cookie', 'req.headers.authorization', 'req.headers["x-csrf-token"]'],
+        paths: [
+          'req.headers.cookie',
+          'req.headers.authorization',
+          'req.headers["x-csrf-token"]',
+          'res.headers["set-cookie"]',
+        ],
       },
       ...(nodeEnv === 'development' && !stream
         ? { transport: { target: 'pino-pretty', options: { singleLine: true } } }

@@ -1,7 +1,8 @@
-import { Controller, Get, Module } from '@nestjs/common';
+import { Controller, Get, Module, Res } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { LoggerModule } from 'nestjs-pino';
+import type { Response } from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildLoggerParams } from './logger.config';
@@ -10,6 +11,12 @@ import { buildLoggerParams } from './logger.config';
 class LogController {
   @Get()
   get() {
+    return { ok: true };
+  }
+
+  @Get('cookie')
+  cookie(@Res({ passthrough: true }) res: Response) {
+    res.cookie('sid', 'secret-session-id');
     return { ok: true };
   }
 }
@@ -54,6 +61,12 @@ describe('structured logging', () => {
     await request(app.getHttpServer()).get('/log').expect(200);
     expect(typeof lastLog().req.id).toBe('string');
     expect(lastLog().req.id.length).toBeGreaterThan(8);
+  });
+
+  it('redacts the Set-Cookie response header', async () => {
+    await request(app.getHttpServer()).get('/log/cookie').expect(200);
+    expect(lastLog().res.headers['set-cookie']).toBe('[Redacted]');
+    expect(lines.join('')).not.toContain('secret-session-id');
   });
 
   it('is silent in the test environment', () => {
