@@ -63,7 +63,7 @@ async function start(): Promise<Harness> {
 
 const get = (): Promise<Harness> => (harness ??= start());
 
-/** The real PrismaService (uuid v7 extension included) connected to this worker's database. */
+/** The real PrismaService connected to this worker's database. */
 export const getPrisma = async (): Promise<PrismaService> => (await get()).prisma;
 
 /** ioredis client connected to this worker's logical Redis database. */

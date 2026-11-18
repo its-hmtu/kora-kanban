@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { uuid } from '@kora/shared';
-import type { Prisma } from '../../src/generated/prisma/client';
 import { createUser } from '../setup/factories';
 import { closeHarness, getPrisma, getRedis, resetDb } from '../setup/test-app';
 
@@ -63,17 +62,32 @@ describe('uuid v7 ids via the real client', () => {
     const created = await prisma.client.user.upsert({
       where: { email: 'u@example.com' },
       update: { name: 'Second' },
-      // generated types require `id`; the extension supplies it
-      create: { email: 'u@example.com', name: 'First' } as Prisma.UserUncheckedCreateInput,
+      create: { email: 'u@example.com', name: 'First' },
     });
     expect(created.id).toMatch(V7);
     const updated = await prisma.client.user.upsert({
       where: { email: 'u@example.com' },
       update: { name: 'Second' },
-      // generated types require `id`; the extension supplies it
-      create: { email: 'u@example.com', name: 'First' } as Prisma.UserUncheckedCreateInput,
+      create: { email: 'u@example.com', name: 'First' },
     });
     expect(updated.id).toBe(created.id);
     expect(updated.name).toBe('Second');
+  });
+
+  it('nested create assigns a uuid v7 id to the child row', async () => {
+    const prisma = await getPrisma();
+    const user = await prisma.client.user.create({
+      data: {
+        email: 'n@example.com',
+        name: 'Nested',
+        sessions: {
+          create: [{ tokenHash: 'h1', expiresAt: new Date(Date.now() + 60_000) }],
+        },
+      },
+      include: { sessions: true },
+    });
+    expect(user.id).toMatch(V7);
+    expect(user.sessions).toHaveLength(1);
+    expect(user.sessions[0]!.id).toMatch(V7);
   });
 });

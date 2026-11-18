@@ -20,7 +20,7 @@ enum Theme {
 }
 
 model User {
-  id              String    @id @db.Uuid // uuid v7, assigned by PrismaService client extension
+  id              String    @id @default(uuid(7)) @db.Uuid
   email           String    @unique @db.Citext
   emailVerifiedAt DateTime? @db.Timestamptz(3)
   passwordHash    String?
@@ -37,7 +37,7 @@ model User {
 }
 
 model Session {
-  id         String   @id @db.Uuid
+  id         String   @id @default(uuid(7)) @db.Uuid
   userId     String   @db.Uuid
   tokenHash  String   @unique
   expiresAt  DateTime @db.Timestamptz(3)
