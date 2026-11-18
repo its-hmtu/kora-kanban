@@ -4,7 +4,10 @@
   "sourceRoot": "src",
   "entryFile": "main",
   "compilerOptions": {
-    "builder": { "type": "swc", "options": { "stripLeadingPaths": true } },
+    "builder": {
+      "type": "swc",
+      "options": { "stripLeadingPaths": true, "extensions": [".js", ".ts", ".tsx"] }
+    },
     "typeCheck": true,
     "deleteOutDir": true,
     "assets": [{ "include": "common/i18n/messages/*.json", "watchAssets": true }],

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Controller, Get, Post } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
@@ -22,7 +22,7 @@ class ProbeController {
 
   @Post('login')
   @UseThrottler('auth')
-  login(@Body() _body: unknown) {
+  login() {
     return { ok: true };
   }
 
@@ -54,7 +54,8 @@ afterAll(async () => {
   await closeHarness();
 });
 
-const login = (email: string) => request(app.getHttpServer()).post('/api/v1/t/login').send({ email });
+const login = (email: string) =>
+  request(app.getHttpServer()).post('/api/v1/t/login').send({ email });
 
 describe('rate limiting', () => {
   it('does not throttle routes that do not opt in', async () => {

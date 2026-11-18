@@ -6,6 +6,7 @@
     "outDir": "dist",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "jsx": "react-jsx",
     "types": ["node"]
   },
   "include": ["src", "test"],
