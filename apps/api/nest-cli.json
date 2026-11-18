@@ -7,6 +7,7 @@
     "builder": { "type": "swc", "options": { "stripLeadingPaths": true } },
     "typeCheck": true,
     "deleteOutDir": true,
+    "assets": [{ "include": "common/i18n/messages/*.json", "watchAssets": true }],
     "tsConfigPath": "tsconfig.build.json"
   }
 }

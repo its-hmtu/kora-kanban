@@ -1,0 +1,14 @@
+{
+  "UNAUTHENTICATED": "You need to sign in to continue.",
+  "FORBIDDEN": "You do not have permission to do that.",
+  "NOT_FOUND": "We could not find what you were looking for.",
+  "VALIDATION": "Some of the submitted data is invalid.",
+  "CONFLICT": "This conflicts with the current state. Please refresh and try again.",
+  "RATE_LIMITED": "Too many requests. Please try again later.",
+  "PAYLOAD_TOO_LARGE": "The request is too large.",
+  "WIP_LIMIT": "This column has reached its work-in-progress limit.",
+  "WORKFLOW_VIOLATION": "This move is not allowed by the board workflow.",
+  "LAST_OWNER": "A workspace must keep at least one owner.",
+  "SESSION_REVOKED": "Your session has ended. Please sign in again.",
+  "INTERNAL": "Something went wrong on our side. Please try again."
+}
