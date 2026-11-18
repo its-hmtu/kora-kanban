@@ -1,6 +1,6 @@
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
-import { screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { renderWithI18n } from '../test/i18n';
 import { __resetApiClientForTests } from '@/lib/api-client';
 import { queryClient } from '@/lib/query-client';
@@ -41,7 +41,10 @@ beforeEach(() => {
   queryClient.clear();
   __resetApiClientForTests();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('_app route guard', () => {
   it('renders the shell (top bar, sidebar, page) when /me returns 200', async () => {
@@ -81,9 +84,18 @@ describe('_app route guard', () => {
   });
 
   it('shows the error boundary rather than redirecting on a server error', async () => {
+    // The production client retries 5xx with backoff (~3s); disable that so the test is fast.
+    const defaults = queryClient.getDefaultOptions();
+    queryClient.setDefaultOptions({ queries: { ...defaults.queries, retry: false } });
+    onTestFinished(() => queryClient.setDefaultOptions(defaults));
+    // The router logs the unhandled error; keep the test output pristine.
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     stubMe(500);
     const router = renderAt('/');
-    await waitFor(() => expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument());
+    // Positive signal first: the router's default error component has rendered.
+    expect(await screen.findByText('Something went wrong!')).toBeInTheDocument();
+    expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/');
   });
 });
