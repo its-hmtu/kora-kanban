@@ -8,7 +8,7 @@ import {
 import { ErrorCode, type ApiError } from '@kora/shared';
 import type { Request, Response } from 'express';
 import { DomainError } from '../errors/domain-error';
-import { localizeMessage, pickLocale } from '../i18n/messages';
+import { localizeMessage, resolveLocale } from '../i18n/messages';
 
 const STATUS_CODES: Record<number, ErrorCode> = {
   400: ErrorCode.VALIDATION,
@@ -64,8 +64,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       this.logger.error(`${req.method} ${req.url}: ${err.message}`, err.stack);
     }
 
-    // TODO(T030): prefer req.user's locale over Accept-Language once authentication exists.
-    const locale = pickLocale(req.headers['accept-language']);
+    const locale = resolveLocale(req.user?.locale, req.headers['accept-language']);
     const body: ApiError = {
       error: {
         code,

@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, type ErrorCode, type Locale } from '@kora/shared';
+import { DEFAULT_LOCALE, LOCALES, type ErrorCode, type Locale } from '@kora/shared';
 import en from './messages/en.json';
 
 type Catalog = Record<ErrorCode, string>;
@@ -28,4 +28,18 @@ export function pickLocale(acceptLanguage: string | undefined): Locale {
 
 export function localizeMessage(code: ErrorCode, locale: Locale): string {
   return (catalogs[locale] ?? en)[code];
+}
+
+/**
+ * Locale for an error message: the signed-in user's locale wins (Prisma's `zh_CN` becomes
+ * `zh-CN`), then Accept-Language, then DEFAULT_LOCALE. `localizeMessage` falls back to the
+ * English catalog for locales that have no catalog yet.
+ */
+export function resolveLocale(
+  userLocale: string | undefined,
+  acceptLanguage: string | undefined,
+): Locale {
+  const fromUser = userLocale?.replace('_', '-');
+  const known = LOCALES.find((l) => l === fromUser);
+  return known ?? pickLocale(acceptLanguage);
 }
