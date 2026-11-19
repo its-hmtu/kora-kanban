@@ -21,6 +21,19 @@ const STATUS_CODES: Record<number, ErrorCode> = {
   429: ErrorCode.RATE_LIMITED,
 };
 
+interface ClientHttpError extends Error {
+  status?: number;
+  statusCode?: number;
+  expose: true;
+}
+
+function isClientHttpError(e: unknown): e is ClientHttpError {
+  if (!(e instanceof Error)) return false;
+  const { status, statusCode, expose } = e as Partial<ClientHttpError>;
+  const s = typeof status === 'number' ? status : statusCode;
+  return expose === true && typeof s === 'number' && s >= 400 && s <= 499;
+}
+
 /** Maps every thrown error onto the `ApiError` envelope. Never leaks internals. */
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
@@ -40,6 +53,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       code = STATUS_CODES[status] ?? ErrorCode.INTERNAL;
+    } else if (isClientHttpError(exception)) {
+      // Express/body-parser errors (413 too large, 415 charset, 400 aborted…) are plain http-errors.
+      // Only the status is forwarded; their messages are never exposed.
+      status = exception.status ?? exception.statusCode ?? 500;
+      code = STATUS_CODES[status] ?? ErrorCode.INTERNAL;
+      this.logger.warn(`${req.method} ${req.url}: ${status} ${exception.message}`);
     } else {
       const err = exception instanceof Error ? exception : new Error(String(exception));
       this.logger.error(`${req.method} ${req.url}: ${err.message}`, err.stack);
