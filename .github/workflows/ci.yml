@@ -45,5 +45,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm i18n:check
+      # The e2e API uses its own database. `prisma migrate deploy` also creates a missing database
+      # (verified on a fresh Postgres 17), but creating it explicitly keeps CI independent of that.
+      - name: Create e2e database
+        run: |
+          PGPASSWORD=kora psql -h localhost -U kora -d kora -tc "SELECT 1 FROM pg_database WHERE datname = 'kora_e2e'" | grep -q 1 \
+            || PGPASSWORD=kora psql -h localhost -U kora -d kora -c 'CREATE DATABASE kora_e2e'
       - run: pnpm --filter @kora/e2e exec playwright install --with-deps chromium
       - run: pnpm e2e -- --project=chromium
