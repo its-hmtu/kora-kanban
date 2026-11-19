@@ -257,22 +257,18 @@ describe('SessionService (real Postgres + Redis)', () => {
 
   it('revokeAllForUser: a session validated concurrently with the revocation keeps no cache key', async () => {
     const alice = await createUser();
-    await svc.create(alice.id, req);
-    let late = '';
-    const realFindMany = prisma.client.session.findMany.bind(prisma.client.session);
-    vi.spyOn(prisma.client.session, 'findMany').mockImplementationOnce((async (args: never) => {
-      const rows = await realFindMany(args);
-      late = await svc.create(alice.id, req); // signs in on another device mid-revocation
-      await svc.validate(late);
-      return rows;
+    const token = await svc.create(alice.id, req); // exists in the DB, not cached yet
+    const realSet = redis.set.bind(redis) as (...args: unknown[]) => Promise<unknown>;
+    // The revocation lands right before validate()'s cache write.
+    vi.spyOn(redis, 'set').mockImplementationOnce((async (...args: unknown[]) => {
+      await svc.revokeAllForUser(alice.id);
+      return realSet(...args);
     }) as never);
 
-    await svc.revokeAllForUser(alice.id);
+    expect(await svc.validate(token)).toBeNull();
 
+    expect(await redis.exists(cacheKey(token))).toBe(0);
     expect(await prisma.client.session.count({ where: { userId: alice.id } })).toBe(0);
-    const keys = await redis.keys('sess:*');
-    for (const k of keys) expect(JSON.parse((await redis.get(k))!).userId).not.toBe(alice.id);
-    if (late) expect(await svc.validate(late)).toBeNull();
   });
 
   it('rotate: issues a new token for the same user and revokes the old one', async () => {
