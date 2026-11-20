@@ -96,30 +96,30 @@ integration tests only where a rule is easy to get wrong.
 
 ### Shared package
 
-- [ ] T013 [P] Create `packages/shared/src/constants.ts`:
+- [x] T013 [P] Create `packages/shared/src/constants.ts`:
   - `LOCALES = ['en','es','fr','de','zh-CN','vi'] as const`, `DEFAULT_LOCALE = 'en'`
   - Length limits: `CARD_TITLE_MAX = 200`, `BOARD_NAME_MAX = 100`, `COLUMN_NAME_MAX = 60`, `WORKSPACE_NAME_MAX = 80`, `LABEL_NAME_MAX = 40`, `USER_NAME_MAX = 100`, `CHECKLIST_TITLE_MAX = 100`, `CHECKLIST_ITEM_MAX = 300`, `BLOCKED_REASON_MAX = 500`
   - `ATTACHMENT_MAX_BYTES = 10_485_760`, `PASSWORD_MIN = 10`
   - `LABEL_COLORS` (the 12 tokens from T006)
-- [ ] T014 [P] Create `packages/shared/src/errors.ts`. Export an `ErrorCode` enum (`UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, VALIDATION, CONFLICT, RATE_LIMITED, PAYLOAD_TOO_LARGE, WIP_LIMIT, WORKFLOW_VIOLATION, LAST_OWNER, SESSION_REVOKED`) and the `ApiError` envelope type `{ error: { code, message, details? } }`.
-- [ ] T015 [P] Create the permissions module in `packages/shared/src/permissions/`:
+- [x] T014 [P] Create `packages/shared/src/errors.ts`. Export an `ErrorCode` enum (`UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, VALIDATION, CONFLICT, RATE_LIMITED, PAYLOAD_TOO_LARGE, WIP_LIMIT, WORKFLOW_VIOLATION, LAST_OWNER, SESSION_REVOKED, INTERNAL`) and the `ApiError` envelope type `{ error: { code, message, details? } }`.
+- [x] T015 [P] Create the permissions module in `packages/shared/src/permissions/`:
   - `roles.ts`: `WorkspaceRole = OWNER|ADMIN|MEMBER|VIEWER`, `BoardRole = ADMIN|MEMBER|VIEWER`.
   - `matrix.ts`: `Permission` string union plus maps `workspacePermissions: Record<WorkspaceRole, Permission[]>` and `boardPermissions: Record<BoardRole, Permission[]>`. Copy every row of `specs/001-kora-kanban-platform/contracts/permissions.md` verbatim.
   - `effective-role.ts`: `effectiveBoardRole({workspaceRole, boardVisibility, boardMemberRole})`, implementing the "Effective board role" rules in permissions.md exactly.
   - `index.ts`: re-exports.
-- [ ] T016 [P] Unit-test `effectiveBoardRole` and the permission matrix in `packages/shared/src/permissions/effective-role.spec.ts`. Cover all five rule lines in permissions.md, including "workspace VIEWER → board VIEWER at most" and "non-workspace member → null".
-- [ ] T017 [P] Create `packages/shared/src/ordering.ts` wrapping `fractional-indexing`:
+- [x] T016 [P] Unit-test `effectiveBoardRole` and the permission matrix in `packages/shared/src/permissions/effective-role.spec.ts`. Cover all five rule lines in permissions.md, including "workspace VIEWER → board VIEWER at most" and "non-workspace member → null".
+- [x] T017 [P] Create `packages/shared/src/ordering.ts` wrapping `fractional-indexing`:
   - `positionBetween(before?: string, after?: string): string`
   - `needsRebalance(key: string)`: true when `key.length > 50`
   - `rebalance(count)`: returns evenly spaced keys
   - Unit tests in `ordering.spec.ts`
-- [ ] T018 [P] Create `packages/shared/src/events/envelope.ts` with the Zod `BoardEventEnvelope` `{boardId, boardVersion: bigint-as-string, type, actorId|null, clientMutationId|null, at, payload}` and the `UserEvent` envelope, exactly as specified in `contracts/realtime-events.md`.
-- [ ] T019 [P] Create `packages/shared/src/schemas/common.ts`: `uuid`, `cursorQuery` `{cursor?: string, limit: 1..100 default 50}`, `paginated<T>()`, `localeSchema = z.enum(LOCALES)`, and `richTextDoc` (ProseMirror JSON: `{type:'doc', content: array}`).
+- [x] T018 [P] Create `packages/shared/src/events/envelope.ts` with the Zod `BoardEventEnvelope` `{boardId, boardVersion: bigint-as-string, type, actorId|null, clientMutationId|null, at, payload}` and the `UserEvent` envelope, exactly as specified in `contracts/realtime-events.md`.
+- [x] T019 [P] Create `packages/shared/src/schemas/common.ts`: `uuid`, `cursorQuery` `{cursor?: string, limit: 1..100 default 50}`, `paginated<T>()`, `localeSchema = z.enum(LOCALES)`, and `richTextDoc` (ProseMirror JSON: `{type:'doc', content: array}`).
 
 ### API infrastructure
 
-- [ ] T020 Configure the Prisma multi-file schema in `apps/api/prisma/schema/base.prisma`: `generator client` (with `prismaSchemaFolder` if the installed Prisma version needs it), `datasource db` postgresql. Add scripts `prisma:migrate`, `prisma:generate`, `db:seed` to `apps/api/package.json`.
-- [ ] T021 Define `User` and `Session` in `apps/api/prisma/schema/identity.prisma`, following data-model.md §1:
+- [x] T020 Configure the Prisma multi-file schema in `apps/api/prisma/schema/base.prisma`: `generator client` (with `prismaSchemaFolder` if the installed Prisma version needs it), `datasource db` postgresql. Add scripts `prisma:migrate`, `prisma:generate`, `db:seed` to `apps/api/package.json`.
+- [x] T021 Define `User` and `Session` in `apps/api/prisma/schema/identity.prisma`, following data-model.md §1:
   - `User` fields:
     - `id` uuid v7, `email` citext unique, `emailVerifiedAt?`, `passwordHash?`
     - `name` ("1–100 chars"), `avatarUrl?`
@@ -127,72 +127,72 @@ integration tests only where a rule is easy to get wrong.
     - `deletedAt?`, `createdAt`, `updatedAt`
   - `Session` fields: `id`, `userId`, `tokenHash` unique, `expiresAt`, `lastSeenAt`, `userAgent?`, `ip?`, `createdAt`. Index on `userId`.
   - Enable the `citext` extension, then run the first migration `init_identity`.
-- [ ] T022 [P] Create `apps/api/src/infra/config/env.ts`, a Zod-validated env loader covering every variable in `.env.example`. P4-only variables are optional. Fail fast on boot when a variable is invalid. Expose it through `ConfigModule` in `apps/api/src/infra/config/config.module.ts`.
-- [ ] T023 [P] Create `PrismaService` (`onModuleInit` connects, uses `uuidv7` ids via a client extension) and a global `PrismaModule` in `apps/api/src/infra/prisma/`.
-- [ ] T024 [P] Create a global `RedisModule` in `apps/api/src/infra/redis/redis.module.ts` providing an `ioredis` client (token `REDIS`) from `REDIS_URL`.
-- [ ] T025 [P] Create `apps/api/src/infra/crypto/crypto.service.ts` with these methods:
+- [x] T022 [P] Create `apps/api/src/infra/config/env.ts`, a Zod-validated env loader covering every variable in `.env.example`. P4-only variables are optional. Fail fast on boot when a variable is invalid. Expose it through `ConfigModule` in `apps/api/src/infra/config/config.module.ts`.
+- [x] T023 [P] Create `PrismaService` (`onModuleInit` connects; ids are UUIDv7 generated by the schema default `@default(uuid(7))`, no client extension) and a global `PrismaModule` in `apps/api/src/infra/prisma/`.
+- [x] T024 [P] Create a global `RedisModule` in `apps/api/src/infra/redis/redis.module.ts` providing an `ioredis` client (token `REDIS`) from `REDIS_URL`.
+- [x] T025 [P] Create `apps/api/src/infra/crypto/crypto.service.ts` with these methods:
   - `randomToken(bytes=32)`: base64url
   - `sha256(value)`: hex
   - `encrypt(plaintext)` / `decrypt(ciphertext)`: AES-256-GCM using `ENCRYPTION_KEY`, output format `iv.tag.data`
   - `timingSafeEqual`
   - Unit test: `crypto.service.spec.ts`.
-- [ ] T026 [P] Configure structured logging with `nestjs-pino` in `apps/api/src/app.module.ts`: JSON output, a request id from the `X-Request-Id` header or generated, and redaction of the `cookie`, `authorization` and `x-csrf-token` headers.
-- [ ] T027 [P] Create `ZodValidationPipe` in `apps/api/src/common/pipes/zod-validation.pipe.ts` plus decorators `@ZodBody(schema)` and `@ZodQuery(schema)`. Validation failures respond `422` with `code: VALIDATION` and `details` from the flattened Zod error.
-- [ ] T028 [P] Create the global exception filter `apps/api/src/common/filters/api-exception.filter.ts` and a `DomainError(code, status, details?)` class in `apps/api/src/common/errors/domain-error.ts`:
+- [x] T026 [P] Configure structured logging with `nestjs-pino` in `apps/api/src/app.module.ts`: JSON output, a request id from the `X-Request-Id` header or generated, and redaction of the `cookie`, `authorization` and `x-csrf-token` headers.
+- [x] T027 [P] Create `ZodValidationPipe` in `apps/api/src/common/pipes/zod-validation.pipe.ts` plus decorators `@ZodBody(schema)` and `@ZodQuery(schema)`. Validation failures respond `422` with `code: VALIDATION` and `details` from the flattened Zod error.
+- [x] T028 [P] Create the global exception filter `apps/api/src/common/filters/api-exception.filter.ts` and a `DomainError(code, status, details?)` class in `apps/api/src/common/errors/domain-error.ts`:
   - Map every error to the `ApiError` envelope.
   - Localize `message` using `Accept-Language` (or the user's locale) with JSON files in `apps/api/src/common/i18n/messages/en.json`.
-  - Unknown errors return 500 with a generic message, and the stack is logged.
-- [ ] T029 Implement `SessionService` in `apps/api/src/modules/auth/session.service.ts` (research A10):
+  - Unknown errors return 500 with `code: INTERNAL` and a generic message, and the stack is logged.
+- [x] T029 Implement `SessionService` in `apps/api/src/modules/auth/session.service.ts` (research A10):
   - `create(userId, req)`: random token, store `sha256` only, 30-day expiry.
   - `validate(token)`: Redis cache key `sess:{hash}` with a 60 s TTL, falling back to Postgres. Slide `expiresAt` and `lastSeenAt` at most once per hour.
   - `revoke(token)`, `revokeAllForUser(userId)` (also deletes the cache keys), `rotate()`.
   - Cookie helper `setSessionCookie(res, token)`: `kora_sid`, `HttpOnly; Secure (prod); SameSite=Lax; Path=/; Max-Age=30d`.
-- [ ] T030 Implement the global `SessionAuthGuard` in `apps/api/src/common/guards/session-auth.guard.ts`. It reads the `kora_sid` cookie, sets `req.user` and `req.session`, and returns 401 `UNAUTHENTICATED`. Routes opt out with `@Public()`. Add the `@CurrentUser()` decorator in `apps/api/src/common/decorators/current-user.decorator.ts`.
-- [ ] T031 Implement `CsrfGuard` in `apps/api/src/common/guards/csrf.guard.ts` (research B3). It applies to **all** non-GET/HEAD/OPTIONS requests, including `@Public()` ones such as login and register, unless the request uses Bearer auth or the route is marked `@SkipCsrf()`:
+- [x] T030 Implement the global `SessionAuthGuard` in `apps/api/src/common/guards/session-auth.guard.ts`. It reads the `kora_sid` cookie, sets `req.user` and `req.session`, and returns 401 `UNAUTHENTICATED`. Routes opt out with `@Public()`. Add the `@CurrentUser()` decorator in `apps/api/src/common/decorators/current-user.decorator.ts`.
+- [x] T031 Implement `CsrfGuard` in `apps/api/src/common/guards/csrf.guard.ts` (research B3). It applies to **all** non-GET/HEAD/OPTIONS requests, including `@Public()` ones such as login and register, unless the request uses Bearer auth or the route is marked `@SkipCsrf()`:
   - Require the `Origin` header to equal `APP_URL`.
   - Require the `X-CSRF-Token` header to equal the `kora_csrf` cookie.
   - Skip when the request is authenticated with a Bearer token, or the route has `@SkipCsrf()` (decorator in `apps/api/src/common/decorators/skip-csrf.decorator.ts`; only for signature-verified inbound webhooks).
   - Add `GET /auth/csrf` (public) in `apps/api/src/modules/auth/csrf.controller.ts` to issue the cookie and token.
-- [ ] T032 Implement the permission framework:
+- [x] T032 Implement the permission framework:
   - Decorator `@RequirePermission(permission, {resource: 'workspace'|'board'|'card'|'column'|..., param: 'wid'|'bid'|'id'})` in `apps/api/src/common/decorators/require-permission.decorator.ts`.
   - `PermissionGuard` in `apps/api/src/common/guards/permission.guard.ts`. It calls a `ResourceAccessRegistry` (in `apps/api/src/common/access/resource-access.registry.ts`) where each module registers a resolver `(id, userId) => {workspaceRole?, boardRole?} | null`.
   - A `null` result throws 404 `NOT_FOUND`. A missing permission throws 403 `FORBIDDEN`.
-- [ ] T033 [P] Configure rate limiting in `apps/api/src/infra/throttler/throttler.module.ts`: `@nestjs/throttler` with Redis storage (`@nest-lab/throttler-storage-redis`). Named throttlers are `auth` (10/min keyed by IP+email) and `api-token` (100/min keyed by token id). A 429 response includes the `Retry-After` header.
-- [ ] T034 [P] Create the BullMQ infrastructure in `apps/api/src/infra/queue/queue.module.ts`: register queue names from `apps/api/src/infra/queue/queues.ts` (`email`, `notifications`, `reminders`, `outbox`, `maintenance`, `webhooks`, `automation`, `integrations`, `data-transfer`, `reports`). Create the worker entrypoint `apps/api/src/worker.ts`, which boots a `WorkerModule` (no HTTP) and registers processors. Add the script `dev:worker`.
-- [ ] T035 [P] Create the mail infrastructure in `apps/api/src/infra/mail/`:
+- [x] T033 [P] Configure rate limiting in `apps/api/src/infra/throttler/throttler.module.ts`: `@nestjs/throttler` with Redis storage (`@nest-lab/throttler-storage-redis`). Named throttlers are `auth` (10/min keyed by IP+email) and `api-token` (100/min keyed by token id). A 429 response includes the `Retry-After` header.
+- [x] T034 [P] Create the BullMQ infrastructure in `apps/api/src/infra/queue/queue.module.ts`: register queue names from `apps/api/src/infra/queue/queues.ts` (`email`, `notifications`, `reminders`, `outbox`, `maintenance`, `webhooks`, `automation`, `integrations`, `data-transfer`, `reports`). Create the worker entrypoint `apps/api/src/worker.ts`, which boots a `WorkerModule` (no HTTP) and registers processors. Add the script `dev:worker`.
+- [x] T035 [P] Create the mail infrastructure in `apps/api/src/infra/mail/`:
   - `MailService.send({to, template, props, locale})` enqueues on the `email` queue.
   - `email.processor.ts` renders React Email templates from `apps/api/src/infra/mail/templates/` and sends with Resend. When `RESEND_API_KEY` is empty, it falls back to SMTP to Mailpit (dev).
   - Base `layout.tsx` template, localized by the `locale` prop.
-- [ ] T036 [P] Add `GET /healthz` (public) in `apps/api/src/modules/health/health.controller.ts`. It checks Prisma `SELECT 1`, Redis `PING` and BullMQ connection, and returns `{status:'ok', checks}` or 503.
-- [ ] T037 Wire the global providers in `apps/api/src/app.module.ts`: `ConfigModule`, `PrismaModule`, `RedisModule`, `QueueModule`, `MailModule`, `ThrottlerModule`, plus `APP_GUARD` entries in order SessionAuthGuard → CsrfGuard → PermissionGuard, and the `APP_FILTER` from T028.
+- [x] T036 [P] Add `GET /healthz` (public) in `apps/api/src/modules/health/health.controller.ts`. It checks Prisma `SELECT 1`, Redis `PING` and BullMQ connection, and returns `{status:'ok', checks}` or 503.
+- [x] T037 Wire the global providers in `apps/api/src/app.module.ts`: `ConfigModule`, `PrismaModule`, `RedisModule`, `QueueModule`, `MailModule`, `ThrottlerModule`, plus `APP_GUARD` entries in order SessionAuthGuard → CsrfGuard → PermissionGuard, and the `APP_FILTER` from T028.
 
 ### API test harness
 
-- [ ] T038 Create the integration test harness `apps/api/test/setup/test-app.ts`:
+- [x] T038 Create the integration test harness `apps/api/test/setup/test-app.ts`:
   - Start Testcontainers `postgres:17` and `redis:7` once per worker.
   - Run `prisma migrate deploy` and build the Nest app with `Test.createTestingModule(AppModule)`.
   - Export `createTestApp()`, `resetDb()` (truncates all tables), and `agentFor(user)`: a Supertest agent that holds a signed-in session cookie plus CSRF token.
-- [ ] T039 [P] Create test factories in `apps/api/test/setup/factories.ts`: `createUser()`, `createWorkspace(owner)`, `addWorkspaceMember(ws, user, role)`, `createBoard(ws, opts)`, `addBoardMember(board, user, role)`, `createColumn()`, `createCard()`. Extend them as later stories add entities.
+- [x] T039 [P] Create test factories in `apps/api/test/setup/factories.ts`: `createUser()`, `createWorkspace(owner)`, `addWorkspaceMember(ws, user, role)`, `createBoard(ws, opts)`, `addBoardMember(board, user, role)`, `createColumn()`, `createCard()`. Extend them as later stories add entities.
 
 ### Web infrastructure
 
-- [ ] T040 [P] Create the API client `apps/web/src/lib/api-client.ts`:
+- [x] T040 [P] Create the API client `apps/web/src/lib/api-client.ts`:
   - `apiFetch<T>(path, {method, body, query, clientMutationId?})` uses `credentials: 'include'` and prefixes `/api/v1`.
   - It attaches `X-CSRF-Token` (calling `GET /auth/csrf` lazily the first time), `Accept-Language` and `X-Client-Mutation-Id`.
   - It parses the `ApiError` envelope into an `ApiError` class.
   - On 401 it redirects to `/login?next=`.
-- [ ] T041 [P] Create the TanStack Query client `apps/web/src/lib/query-client.ts`: default `staleTime` 30 s, retry 2 except on 4xx, and a global `onError` toast for mutation errors (using `sonner`).
-- [ ] T042 [P] Set up i18n:
+- [x] T041 [P] Create the TanStack Query client `apps/web/src/lib/query-client.ts`: default `staleTime` 30 s, retry 2 except on 4xx, and a global `onError` toast for mutation errors (using `sonner`).
+- [x] T042 [P] Set up i18n:
   - `apps/web/src/i18n/index.ts`: i18next + react-i18next, lazy backend loading `locales/{lng}/{ns}.json`, fallback `en`, namespaces `common, auth, workspace, board, card, notifications, settings`.
   - Create `apps/web/src/i18n/locales/en/*.json`.
   - Create the script `scripts/i18n-check.ts` (root `i18n:check`). It fails when any key in `en` is missing from another locale folder that exists, or when the code (`t('...')` calls) uses a key that's missing from `en`.
-- [ ] T043 [P] Install the shadcn/ui components into `apps/web/src/components/ui/`: button, input, textarea, label, dialog, sheet, dropdown-menu, popover, command, tooltip, avatar, badge, tabs, select, checkbox, calendar, form, separator, skeleton, scroll-area. Add the `sonner` toaster.
-- [ ] T044 [P] Create the theme provider `apps/web/src/components/theme-provider.tsx`: light, dark or system, applying the `.dark` class on `<html>`, persisted to localStorage and later synced from the profile.
-- [ ] T045 Build the app shell and route guards:
+- [x] T043 [P] Install the shadcn/ui components into `apps/web/src/components/ui/`: button, input, textarea, label, dialog, sheet, dropdown-menu, popover, command, tooltip, avatar, badge, tabs, select, checkbox, calendar, form, separator, skeleton, scroll-area. Add the `sonner` toaster.
+- [x] T044 [P] Create the theme provider `apps/web/src/components/theme-provider.tsx`: light, dark or system, applying the `.dark` class on `<html>`, persisted to localStorage and later synced from the profile.
+- [x] T045 Build the app shell and route guards:
   - `apps/web/src/routes/__root.tsx`: providers for QueryClient, i18n, theme and Toaster.
   - `apps/web/src/routes/_auth.tsx`: public layout for the login and register pages.
   - `apps/web/src/routes/_app.tsx`: authenticated layout, loads `GET /me`, redirects to `/login` on 401, includes a sidebar placeholder and a top bar.
-- [ ] T046 [P] Create Playwright fixtures in `e2e/fixtures.ts`:
+- [x] T046 [P] Create Playwright fixtures in `e2e/fixtures.ts`:
   - `signUpAndLogin(page, {email,name})` via the API, and `twoUsers` (two independent browser contexts).
   - `resetDb` calls a test-only endpoint `POST /api/v1/__test/reset`, enabled only when `NODE_ENV=test`.
   - Implement that endpoint in `apps/api/src/modules/health/test-reset.controller.ts`.

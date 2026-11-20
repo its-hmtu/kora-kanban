@@ -37,6 +37,13 @@ Each phase MUST be shippable on its own; later phases build on earlier ones.
 - Data portability: export boards and re-import Kora export files.
 - Attachment size limit: 10 MB per file.
 
+## Clarifications
+
+### Session 2026-11-20
+
+- Q: In what form should the API send `boardVersion` (over WebSocket and REST)? → A: As a decimal string everywhere (e.g. `"1042"`), since it is a bigint; applied in contracts/realtime-events.md and contracts/rest-api.md.
+- Q: Which error code does the API return for unexpected server errors (500 or unmapped status)? → A: `INTERNAL`, with a generic localized message and no internal details; added to the `ErrorCode` list (T014) and contracts/rest-api.md.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Account & Sign-in (Priority: P1 · MVP)

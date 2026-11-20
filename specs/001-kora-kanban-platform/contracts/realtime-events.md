@@ -32,7 +32,7 @@ Every board event has this envelope:
 ```json
 {
   "boardId": "uuid",
-  "boardVersion": 1042,
+  "boardVersion": "1042",
   "type": "card.moved",
   "actorId": "uuid | null",
   "clientMutationId": "uuid | null",
@@ -41,6 +41,8 @@ Every board event has this envelope:
 }
 ```
 
+- `boardVersion` (and `sinceVersion`) are bigints sent as decimal strings (e.g. `"1042"`),
+  never JSON numbers; clients compare them with `BigInt(...)`.
 - Clients apply events in `boardVersion` order. If there's a gap (received version > last + 1),
   the client re-joins with `sinceVersion` to catch up.
 - A client ignores the echo of its own change, identified by a matching `clientMutationId`

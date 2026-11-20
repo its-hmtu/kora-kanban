@@ -17,11 +17,14 @@ One API serves the Kora web app and the public API (FR-130).
 - **Validation**: request bodies are validated against Zod schemas from `packages/shared`.
   Failure → `422`.
 - **Errors**: `{ "error": { "code": "WIP_LIMIT", "message": "…", "details": {} } }`, with the
-  message localized by `Accept-Language`.
+  message localized by `Accept-Language`. Unexpected server errors (500, or any status with no
+  more specific code) use `code: "INTERNAL"` with a generic message; internal details are
+  logged, never returned.
 - **Pagination**: cursor-based, `?cursor=…&limit=50` (max 100) → `{ items, nextCursor }`.
 - **Mutations**:
   - Accept an optional `X-Client-Mutation-Id` (uuid) for idempotent offline replay.
   - Responses include `boardVersion` when the change touched a board.
+    `boardVersion` is a bigint serialized as a decimal string (e.g. `"1042"`), never a JSON number.
 - **Rate limits**:
   - Auth routes: 10 per minute per IP+email.
   - Public API tokens: 100 per minute. Exceeded → `429` with a `Retry-After` header.
