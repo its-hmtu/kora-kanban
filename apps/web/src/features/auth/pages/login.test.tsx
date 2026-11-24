@@ -100,3 +100,14 @@ describe('login page', () => {
     );
   });
 });
+
+describe('login page validation', () => {
+  it('says required (not a minimum length) for an empty password', async () => {
+    const fetchMock = stubApi();
+    renderAt('/login');
+    await fill('a@b.co', '');
+    expect(await screen.findByText('This field is required.')).toBeInTheDocument();
+    expect(screen.queryByText(/Use at least/)).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

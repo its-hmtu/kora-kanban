@@ -49,4 +49,18 @@ describe('verify-email page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('invalid or has expired');
     expect(verifyCalls(fetchMock)).toHaveLength(0);
   });
+
+  it('shows the throttled message (not "invalid") on 429', async () => {
+    stubApi(() => apiError(429, 'RATE_LIMITED'));
+    renderAt('/verify-email?token=abc');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Too many attempts');
+    expect(alert).not.toHaveTextContent('invalid');
+  });
+
+  it('shows the generic message on a server error', async () => {
+    stubApi(() => apiError(500, 'INTERNAL'));
+    renderAt('/verify-email?token=abc');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong');
+  });
 });

@@ -96,7 +96,7 @@ function ResetPasswordPage() {
           type="password"
           autoComplete="new-password"
           registration={register('password')}
-          error={fieldError(t, 'password', errors.password)}
+          error={fieldError(t, 'newPassword', errors.password)}
         />
         <AuthField
           label={t('fields.confirmPassword')}

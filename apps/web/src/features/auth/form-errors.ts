@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/api-client';
 export function validationMessage(t: TFunction, field: string, type?: string): string {
   if (type === 'invalid_format') return t('auth:validation.email');
   if (type === 'too_small') {
-    return field === 'password'
+    return field === 'newPassword'
       ? t('auth:validation.passwordMin', { count: PASSWORD_MIN })
       : t('auth:validation.required');
   }
@@ -74,4 +74,11 @@ export function isTokenInvalid(err: unknown): boolean {
   return (
     err instanceof ApiError && serverFieldErrors(err).token?.includes('TOKEN_INVALID') === true
   );
+}
+
+/** Message for a failed request that has no form: throttled, or generic for anything else. */
+export function failureMessage(err: unknown, t: TFunction): string {
+  const throttled =
+    err instanceof ApiError && (err.status === 429 || err.code === ErrorCode.RATE_LIMITED);
+  return throttled ? t('auth:errors.throttled') : t('auth:errors.generic');
 }

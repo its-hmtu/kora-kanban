@@ -74,7 +74,7 @@ function RegisterPage() {
           type="password"
           autoComplete="new-password"
           registration={register('password')}
-          error={fieldError(t, 'password', errors.password)}
+          error={fieldError(t, 'newPassword', errors.password)}
         />
         <Button type="submit" className="w-full" disabled={registerUser.isPending}>
           {registerUser.isPending ? t('register.submitting') : t('register.submit')}
