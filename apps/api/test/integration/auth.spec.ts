@@ -120,6 +120,16 @@ const UNAUTH = {
 };
 
 describe('POST /auth/register', () => {
+  it('refuses the reserved .invalid placeholder address used for deleted accounts', async () => {
+    const res = await register({
+      email: 'deleted+01a20e1e-2da6-75db-b85d-12ec675132d3@deleted.invalid',
+      password: PASSWORD,
+      name: 'Squatter',
+    });
+    expect(res.status).toBe(422);
+    expect(await (await getPrisma()).client.user.count()).toBe(0);
+  });
+
   it('still signs the new user in (201) when the verification email cannot be sent', async () => {
     const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     vi.spyOn(app.get(MailService), 'send').mockRejectedValueOnce(new Error('redis down'));

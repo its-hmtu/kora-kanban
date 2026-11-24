@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { isReservedEmail } from '@kora/shared';
 import { generateCodeVerifier, generateState } from 'arctic';
 import type { CookieOptions, Request, Response } from 'express';
 import { APP_CONFIG } from '../../../infra/config/config.module';
@@ -96,6 +97,7 @@ export class OAuthService {
     req: Request,
     res: Response,
   ): Promise<string> {
+    res.clearCookie(OAUTH_COOKIE, this.cookieOptions()); // single use, whatever happens next
     const p = this.enabledProvider(provider);
     if (!p) return this.loginError('oauth_failed');
     const flow = openOAuthCookie(
@@ -103,7 +105,6 @@ export class OAuthService {
       this.config.SESSION_SECRET,
       this.clock.now(),
     );
-    res.clearCookie(OAUTH_COOKIE, this.cookieOptions()); // single use, whatever happens next
 
     if (query.error !== undefined) return this.loginError('oauth_failed');
     const { code, state } = query;
@@ -175,6 +176,8 @@ export class OAuthService {
 
       const { email } = profile;
       if (!email || !profile.emailVerified) return { error: 'oauth_email_unverified' };
+      // `.invalid` is the placeholder domain of deleted accounts: never create or link on it.
+      if (isReservedEmail(email)) return { error: 'oauth_failed' };
       const account = {
         provider,
         providerUserId: profile.providerUserId,

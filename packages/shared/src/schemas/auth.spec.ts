@@ -154,3 +154,17 @@ describe('verifyEmailSchema', () => {
     expect(verifyEmailSchema.safeParse({}).success).toBe(false);
   });
 });
+
+describe('reserved .invalid addresses', () => {
+  const placeholder = 'deleted+01a20e1e-2da6-75db-b85d-12ec675132d3@deleted.invalid';
+  it.each([
+    ['register', registerSchema, good],
+    ['login', loginSchema, { password: 'x' }],
+    ['forgot', forgotSchema, {}],
+  ])('%s rejects any address ending in .invalid, case-insensitively', (_n, schema, rest) => {
+    for (const email of [placeholder, 'A@Foo.INVALID']) {
+      expect(schema.safeParse({ ...rest, email }).success).toBe(false);
+    }
+    expect(schema.safeParse({ ...rest, email: 'a@invalid.example.com' }).success).toBe(true);
+  });
+});

@@ -4,7 +4,15 @@ import { localeSchema } from './common';
 
 const PASSWORD_MAX = 200;
 
-const email = z.string().trim().toLowerCase().pipe(z.email());
+/** `.invalid` is reserved (RFC 2606); the API uses it for the placeholder email of deleted accounts. */
+export const isReservedEmail = (value: string): boolean => /\.invalid$/i.test(value);
+
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email())
+  .refine((value) => !isReservedEmail(value));
 const newPassword = z.string().min(PASSWORD_MIN).max(PASSWORD_MAX);
 
 const name = z.string().trim().min(1).max(USER_NAME_MAX);

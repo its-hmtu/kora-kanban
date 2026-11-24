@@ -201,6 +201,7 @@ describe('GET /auth/oauth/:provider', () => {
     expect(setCookies(disabled, 'kora_oauth')).toEqual([]);
     const cb = await agent.get(`${API}/auth/oauth/github/callback?code=x&state=y`).expect(302);
     expect(cb.headers.location).toBe(login);
+    expectOAuthCookieCleared(cb);
   });
 });
 
@@ -374,6 +375,14 @@ describe('GET /auth/oauth/:provider/callback — sign-in and linking', () => {
       await prisma.client.oAuthAccount.findMany({ where: { provider: 'google' } }),
     ).toMatchObject([{ userId: created.id }]);
     expect((await whoAmI(second.agent)).body).toEqual({ id: created.id });
+  });
+
+  it('refuses a provider email on the reserved .invalid TLD: no user, no link', async () => {
+    const squat = await signInWith('github', profile({ email: 'deleted+x@Deleted.INVALID' }));
+    expect(squat.res.headers.location).toBe(`${appUrl}/login?error=oauth_failed`);
+    expect(await prisma.client.user.count()).toBe(0);
+    expect(await prisma.client.oAuthAccount.count()).toBe(0);
+    expect(await prisma.client.session.count()).toBe(0);
   });
 
   it('concurrent first logins for the same provider account end with one user', async () => {
