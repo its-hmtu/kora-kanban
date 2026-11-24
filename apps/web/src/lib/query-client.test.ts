@@ -43,4 +43,14 @@ describe('query client', () => {
     await observer.mutate().catch(() => {});
     expect(toast.error).toHaveBeenCalledWith('boom');
   });
+
+  it('does not toast a mutation that renders its own errors', async () => {
+    const client = createQueryClient();
+    const observer = new MutationObserver(client, {
+      mutationFn: () => Promise.reject(apiError(401)),
+      meta: { inlineErrors: true },
+    });
+    await observer.mutate().catch(() => {});
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 });

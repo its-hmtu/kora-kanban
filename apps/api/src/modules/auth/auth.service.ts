@@ -23,6 +23,9 @@ import { tokenInvalid, VerificationService } from './verification.service';
 /** Hashed once (same argon2 parameters) so a login for a missing user costs a real verify. */
 const DUMMY_PASSWORD = 'kora-dummy-password-for-timing';
 
+/** Minimum gap between two verification emails to the same user (resend). */
+const RESEND_COOLDOWN_MS = 60_000;
+
 const emailTaken = () =>
   new DomainError(ErrorCode.VALIDATION, 422, { fieldErrors: { email: ['EMAIL_TAKEN'] } });
 const unauthenticated = () => new DomainError(ErrorCode.UNAUTHENTICATED, 401);
@@ -71,7 +74,13 @@ export class AuthService implements OnModuleInit {
       }
       throw error;
     }
-    await this.sendVerifyEmail(user);
+    // The account exists now: a failed email must not turn into a 500 for a registered user. The
+    // banner's resend recovers.
+    try {
+      await this.sendVerifyEmail(user);
+    } catch (error) {
+      this.logger.error({ err: error, userId: user.id }, 'Sending the verification email failed');
+    }
     await this.signIn(user.id, req, res);
     return user;
   }
@@ -138,9 +147,12 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  /** Emails a fresh verification link to a signed-in, still unverified user; no-op otherwise. */
+  /** Emails a fresh verification link to a signed-in, still unverified user; no-op otherwise (and within 60 s of the last one). */
   async resendVerification(user: AuthUser): Promise<void> {
     if (user.emailVerifiedAt) return;
+    if (await this.verifications.hasRecentUnused(user.id, 'email_verify', RESEND_COOLDOWN_MS)) {
+      return;
+    }
     await this.sendVerifyEmail(user);
   }
 

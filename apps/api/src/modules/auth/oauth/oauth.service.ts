@@ -117,7 +117,11 @@ export class OAuthService {
     try {
       profile = await this.providers.fetchProfile(p, code, flow.codeVerifier);
     } catch (error) {
-      if (error instanceof OAuthCodeRejectedError) throw badCallback();
+      if (error instanceof OAuthCodeRejectedError) {
+        // Visible to operators: a persistent invalid_client means a misconfigured provider.
+        this.logger.warn(`${p} code rejected: ${error.providerCode}`);
+        throw badCallback();
+      }
       this.logger.warn(
         `${p} sign-in failed: ${error instanceof Error ? error.message : 'unknown'}`,
       );

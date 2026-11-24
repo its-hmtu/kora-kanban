@@ -1,12 +1,15 @@
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { toast } from 'sonner';
 import { renderWithI18n } from '../test/i18n';
 import { apiError, stubApi } from '@/features/auth/test-helpers';
 import { __resetApiClientForTests } from '@/lib/api-client';
 import type { Me } from '@/lib/me';
 import { queryClient } from '@/lib/query-client';
 import { createAppRouter } from './router';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() }, Toaster: () => null }));
 
 const me: Me = {
   user: {
@@ -127,6 +130,7 @@ describe('top bar sign out', () => {
   });
 
   it('stays in the app when the server rejects the sign out', async () => {
+    vi.mocked(toast.error).mockClear();
     stubApi((path) =>
       path === '/me'
         ? { status: 200, body: me }
@@ -140,6 +144,7 @@ describe('top bar sign out', () => {
     fireEvent.click(button);
 
     await waitFor(() => expect(button).not.toBeDisabled());
+    expect(toast.error).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('top-bar')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/');
   });

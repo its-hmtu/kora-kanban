@@ -120,6 +120,23 @@ const UNAUTH = {
 };
 
 describe('POST /auth/register', () => {
+  it('still signs the new user in (201) when the verification email cannot be sent', async () => {
+    const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(app.get(MailService), 'send').mockRejectedValueOnce(new Error('redis down'));
+    const agent = await anonAgent();
+    const res = await agent
+      .post(`${API}/auth/register`)
+      .send({ email: 'half@example.com', password: PASSWORD, name: 'Half' })
+      .expect(201);
+    const user = await prisma.client.user.findUniqueOrThrow({
+      where: { email: 'half@example.com' },
+    });
+    expect(res.body.user.id).toBe(user.id);
+    expect(await prisma.client.session.count({ where: { userId: user.id } })).toBe(1);
+    await asSession(cookieValue(res, 'kora_sid')!).expect(200, { id: user.id });
+    expect(logged).toHaveBeenCalledTimes(1);
+  });
+
   it('creates the user, signs them in and enqueues a verify email', async () => {
     const agent = await anonAgent();
     const res = await agent
@@ -242,6 +259,18 @@ describe('POST /auth/verify-email/resend', () => {
     expect(jobs[0]).toMatchObject({ to: 'r@example.com', template: 'verify-email' });
     const token = tokenFrom(jobs[0], '/verify-email');
     await (await anonAgent()).post(`${API}/auth/verify-email`).send({ token }).expect(204);
+  });
+
+  it('sends one email per 60 s: a resend inside the cooldown is a 204 no-op', async () => {
+    const user = await createUser({ emailVerifiedAt: null, email: 'flood@example.com' });
+    const agent = await agentFor(user);
+    await agent.post(`${API}/auth/verify-email/resend`).expect(204);
+    clockOffset = 30_000;
+    await agent.post(`${API}/auth/verify-email/resend`).expect(204);
+    expect(await emailJobs()).toHaveLength(1);
+    clockOffset = MINUTE + 1;
+    await agent.post(`${API}/auth/verify-email/resend`).expect(204);
+    expect(await emailJobs()).toHaveLength(2);
   });
 
   it('is a 204 no-op when the email is already verified', async () => {

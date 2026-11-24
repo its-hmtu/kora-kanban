@@ -2,6 +2,15 @@ import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ApiError } from './api-client';
 
+declare module '@tanstack/react-query' {
+  interface Register {
+    mutationMeta: {
+      /** The caller renders this mutation's errors itself, so the global toast stays silent. */
+      inlineErrors?: boolean;
+    };
+  }
+}
+
 const MAX_RETRIES = 2;
 
 /** Retry up to 2 times, except on 4xx responses, which will not succeed on retry. */
@@ -14,7 +23,8 @@ export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: { queries: { staleTime: 30_000, retry: shouldRetry } },
     mutationCache: new MutationCache({
-      onError: (error) => {
+      onError: (error, _variables, _context, mutation) => {
+        if (mutation.meta?.inlineErrors) return;
         toast.error(error.message);
       },
     }),

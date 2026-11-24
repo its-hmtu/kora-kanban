@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ErrorCode, type ChangePasswordInput, type Locale, type UpdateMeInput } from '@kora/shared';
 import type { Request, Response } from 'express';
 import { DomainError } from '../../common/errors/domain-error';
@@ -7,7 +7,7 @@ import { PrismaService } from '../../infra/prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { AUTH_USER_SELECT } from '../auth/auth.types';
 import { PasswordService } from '../auth/password.service';
-import { SessionService } from '../auth/session.service';
+import { CLOCK, SessionService, type Clock } from '../auth/session.service';
 
 const ME_SELECT = {
   ...AUTH_USER_SELECT,
@@ -47,6 +47,7 @@ export class UsersService {
     private readonly auth: AuthService,
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async getMe(userId: string): Promise<MeResponse> {
@@ -115,7 +116,7 @@ export class UsersService {
     // TODO(US2): block when the user is the sole Owner of a workspace.
     await this.prisma.client.user.update({
       where: { id: userId, deletedAt: null },
-      data: { deletedAt: new Date() },
+      data: { deletedAt: this.clock.now() },
     });
     await this.auth.logoutAll(userId, res);
   }

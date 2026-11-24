@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { useLogout } from '@/features/auth/api';
+import { useLogout, useMe } from '@/features/auth/api';
 import { VerifyEmailBanner } from '@/features/auth/components/verify-email-banner';
 import { ApiError } from '@/lib/api-client';
 import { fetchMe, meQueryKey } from '@/lib/me';
@@ -31,7 +31,9 @@ export const Route = createFileRoute('/_app')({
 
 function AppLayout() {
   const { t } = useTranslation('common');
-  const { me } = Route.useRouteContext();
+  const { me: initial } = Route.useRouteContext();
+  // Live profile, so the header follows an edit; the route context is the first-load snapshot.
+  const me = useMe().data ?? initial;
   return (
     <div className="flex min-h-screen flex-col">
       <header

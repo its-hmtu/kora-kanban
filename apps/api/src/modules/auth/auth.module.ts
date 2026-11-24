@@ -22,6 +22,6 @@ import { VerificationService } from './verification.service';
     OAuthProviderClient,
     { provide: CLOCK, useValue: systemClock },
   ],
-  exports: [AuthService, SessionService, PasswordService, VerificationService],
+  exports: [AuthService, SessionService, PasswordService, VerificationService, CLOCK],
 })
 export class AuthModule {}

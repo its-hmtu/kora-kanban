@@ -44,6 +44,24 @@ export class VerificationService {
   }
 
   /**
+   * Whether an unused token of `type` was issued less than `windowMs` ago. Tokens carry no
+   * creation time, so it is derived from `expiresAt - TTL`.
+   */
+  async hasRecentUnused(userId: string, type: VerificationTokenType, windowMs: number) {
+    const issuedAfter = new Date(this.clock.now().getTime() - windowMs);
+    const found = await this.prisma.client.verificationToken.findFirst({
+      where: {
+        userId,
+        type,
+        usedAt: null,
+        expiresAt: { gt: new Date(issuedAfter.getTime() + VERIFICATION_TTL_MS[type]) },
+      },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
+  /**
    * Single-use: the conditional update means concurrent consumers cannot both succeed. Unknown,
    * expired, used and wrong-type tokens are indistinguishable (422 TOKEN_INVALID).
    */

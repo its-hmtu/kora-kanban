@@ -70,6 +70,7 @@ describe('profile settings page', () => {
     fireEvent.change(screen.getByLabelText('Time zone'), { target: { value: 'Europe/Paris' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByText('Profile saved.')).toBeInTheDocument();
+    expect(within(screen.getByTestId('top-bar')).getByText('Ada B')).toBeInTheDocument();
     expect(lastBody(fetchMock)).toEqual({
       name: 'Ada B',
       avatarUrl: 'https://example.com/a.png',

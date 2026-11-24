@@ -451,6 +451,14 @@ describe('GET /auth/oauth/:provider/callback — rejected flows', () => {
     expectOAuthCookieCleared(res);
   });
 
+  it('logs the provider and the provider error code when the code is rejected', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const agent = request.agent(app.getHttpServer());
+    const { state } = await start(agent, 'github');
+    await callback(agent, 'github', { code: 'never-issued', state }).expect(400);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/github.*invalid_grant/));
+  });
+
   it('a provider API failure after the code exchange redirects with oauth_failed', async () => {
     providers.failProfileFetch = true;
     const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);

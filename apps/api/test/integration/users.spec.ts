@@ -14,6 +14,7 @@ import {
   SESSION_REVOKED_EVENT,
   SessionRevokedEvent,
 } from '../../src/modules/auth/session-revoked.event';
+import { CLOCK, type Clock } from '../../src/modules/auth/session.service';
 import { createUser } from '../setup/factories';
 import { agentFor, closeHarness, createTestApp, getPrisma, resetDb } from '../setup/test-app';
 
@@ -30,16 +31,25 @@ const API = '/api/v1';
 const PASSWORD = 'correct horse battery staple';
 const NEW_PASSWORD = 'a completely new passphrase';
 
+let clockOffset = 0;
+const clock: Clock = { now: () => new Date(Date.now() + clockOffset) };
+
 let app: NestExpressApplication;
 let prisma: PrismaService;
 let appOrigin: string;
 
 beforeAll(async () => {
-  app = await createTestApp({ controllers: [ProbeController] });
+  app = await createTestApp({
+    controllers: [ProbeController],
+    overrides: [{ provide: CLOCK, useValue: clock }],
+  });
   prisma = await getPrisma();
   appOrigin = new URL(app.get<Env>(APP_CONFIG).APP_URL).origin;
 });
-beforeEach(resetDb);
+beforeEach(async () => {
+  clockOffset = 0;
+  await resetDb();
+});
 afterAll(closeHarness);
 
 function setCookies(res: Response, name: string): string[] {
@@ -357,6 +367,16 @@ describe('DELETE /me', () => {
     const again = await login('bye@example.com', PASSWORD);
     expect(again.status).toBe(401);
     expect(setCookies(again, 'kora_sid')).toEqual([]);
+  });
+
+  it('stamps deletedAt from the injected clock', async () => {
+    const user = await createUser();
+    const agent = await agentFor(user);
+    clockOffset = 3_600_000;
+    const before = Date.now();
+    await agent.delete(`${API}/me`).expect(204);
+    const row = await prisma.client.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(row.deletedAt!.getTime()).toBeGreaterThanOrEqual(before + 3_600_000);
   });
 
   it('requires the CSRF token', async () => {

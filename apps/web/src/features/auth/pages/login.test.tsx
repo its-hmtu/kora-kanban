@@ -1,8 +1,14 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, lastBody, renderAt, resetAuthTestState, stubApi } from '../test-helpers';
 
-beforeEach(resetAuthTestState);
+vi.mock('sonner', () => ({ toast: { error: vi.fn() }, Toaster: () => null }));
+
+beforeEach(() => {
+  resetAuthTestState();
+  vi.mocked(toast.error).mockClear();
+});
 afterEach(() => vi.unstubAllGlobals());
 
 const ok = {
@@ -50,6 +56,7 @@ describe('login page', () => {
       'The email or password is incorrect.',
     );
     expect(router.state.location.pathname).toBe('/login');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('shows the throttled message on 429', async () => {
