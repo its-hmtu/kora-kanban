@@ -366,6 +366,48 @@ describe('POST /auth/login', () => {
       expect((await login('race-del@example.com')).status).toBe(401);
       expect(await prisma.client.session.count()).toBe(0);
     });
+
+    it('an OAuth takeover transaction still open while login creates its session → 401', async () => {
+      // Mirrors OAuthService: one interactive transaction clears the password and deletes the
+      // sessions, and commits only after login has created its session and re-read the user.
+      const user = await userWithPassword({ email: 'race-tx@example.com' });
+      const sessions = app.get(SessionService);
+      let txWrote!: () => void;
+      const wrote = new Promise<void>((resolve) => (txWrote = resolve));
+      let commit!: () => void;
+      const committed = new Promise<void>((resolve) => (commit = resolve));
+      let afterCommit: (() => Promise<void>) | undefined;
+      const takeover = prisma.client.$transaction(
+        async (tx) => {
+          await tx.user.update({ where: { id: user.id }, data: { passwordHash: null } });
+          afterCommit = await sessions.revokeAllForUserInTx(tx, user.id);
+          txWrote();
+          await committed;
+        },
+        { timeout: 30_000 },
+      );
+      interleave(() => wrote);
+
+      let settled = false;
+      const attempt = login('race-tx@example.com').finally(() => (settled = true));
+      // Commit once login is blocked on a row lock (the fix) or has already answered (the bug).
+      const lockWaits = async () =>
+        (
+          await prisma.client.$queryRaw<{ n: bigint }[]>`
+            SELECT count(*) AS n FROM pg_locks WHERE NOT granted`
+        )[0]!.n > 0n;
+      await wrote;
+      while (!settled && !(await lockWaits())) await new Promise((r) => setTimeout(r, 10));
+      commit();
+      await takeover;
+      await afterCommit?.();
+
+      const res = await attempt;
+      expect(res.status).toBe(401);
+      expect(setCookies(res, 'kora_sid')).toEqual([]);
+      expect(setCookies(res, 'kora_csrf')).toEqual([]);
+      expect(await prisma.client.session.count()).toBe(0);
+    });
   });
 
   it('without a CSRF token → 403 (login CSRF protection)', async () => {

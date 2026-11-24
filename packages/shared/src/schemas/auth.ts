@@ -9,11 +9,23 @@ const newPassword = z.string().min(PASSWORD_MIN).max(PASSWORD_MAX);
 
 const name = z.string().trim().min(1).max(USER_NAME_MAX);
 
-let timeZones: ReadonlySet<string> | undefined;
-/** Exact ids from the runtime's zone list plus `UTC`; rejects case variants and offsets. */
+/** IANA-shaped: two or more `/`-separated segments, each starting with an uppercase letter. */
+const IANA_ZONE_SHAPE = /^[A-Z][A-Za-z0-9_+-]*(?:\/[A-Z][A-Za-z0-9_+-]*)+$/;
+
+/**
+ * `UTC`, or an IANA-shaped id the runtime's Intl accepts. The shape check rejects case variants
+ * and offsets (which Intl would accept); Intl rejects unknown zones. Not checked against
+ * `Intl.supportedValuesOf`, which lists legacy names (e.g. Asia/Saigon, not Asia/Ho_Chi_Minh).
+ */
 const isSupportedTimeZone = (value: string): boolean => {
-  timeZones ??= new Set([...Intl.supportedValuesOf('timeZone'), 'UTC']);
-  return timeZones.has(value);
+  if (value === 'UTC') return true;
+  if (!IANA_ZONE_SHAPE.test(value)) return false;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const registerSchema = z.object({

@@ -116,10 +116,31 @@ describe('updateMeSchema', () => {
     expect(updateMeSchema.parse({ name: '  Ada ' })).toEqual({ name: 'Ada' });
     expect(updateMeSchema.safeParse({ name: '  ' }).success).toBe(false);
   });
-  it('accepts only exact supported time zone ids (plus UTC)', () => {
-    expect(updateMeSchema.safeParse({ timezone: 'UTC' }).success).toBe(true);
-    expect(updateMeSchema.safeParse({ timezone: 'America/New_York' }).success).toBe(true);
-    for (const timezone of ['europe/paris', 'EUROPE/PARIS', 'utc', '+01:00', '-0500', ' UTC']) {
+  it('accepts UTC and IANA-shaped zone ids the runtime knows, including primary ids', () => {
+    for (const timezone of [
+      'UTC',
+      'Asia/Ho_Chi_Minh',
+      'Asia/Kolkata',
+      'Europe/Kyiv',
+      'America/Argentina/Buenos_Aires',
+      'Etc/GMT+1',
+      'America/New_York',
+    ]) {
+      expect(updateMeSchema.safeParse({ timezone }).success, timezone).toBe(true);
+    }
+  });
+  it('rejects case variants, offsets, unknown zones and blanks', () => {
+    for (const timezone of [
+      'europe/paris',
+      'Europe/paris',
+      'utc',
+      '+01:00',
+      '-0500',
+      ' UTC',
+      'Foo/Bar',
+      'Europe',
+      '',
+    ]) {
       expect(updateMeSchema.safeParse({ timezone }).success, timezone).toBe(false);
     }
   });

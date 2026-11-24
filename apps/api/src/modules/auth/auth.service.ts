@@ -92,12 +92,13 @@ export class AuthService implements OnModuleInit {
 
     const token = await this.startSession(user.id, req);
     // A reset, password change, OAuth takeover or deletion may have revoked every session after
-    // we verified the old hash but before our row existed. Those writes change the user row before
-    // revoking, so re-reading it now catches every such interleaving.
-    const current = await this.prisma.client.user.findUnique({
-      where: { id: user.id },
-      select: { passwordHash: true, deletedAt: true },
-    });
+    // we verified the old hash but before our row existed. Each one changes the user row and then
+    // deletes sessions. FOR SHARE waits for a revoker whose transaction is still open (the OAuth
+    // takeover does both in one transaction, so our row escaped its DELETE) and reads the row as
+    // it committed; a revoker that has not written yet will still delete our row.
+    const [current] = await this.prisma.client.$queryRaw<
+      { passwordHash: string | null; deletedAt: Date | null }[]
+    >`SELECT "passwordHash", "deletedAt" FROM "User" WHERE "id" = ${user.id}::uuid FOR SHARE`;
     if (current?.passwordHash !== passwordHash || current.deletedAt) {
       await this.sessions.revoke(token);
       throw unauthenticated();
