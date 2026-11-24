@@ -180,6 +180,21 @@ describe('OAuthProviderClient', () => {
     );
   });
 
+  it('throws OAuthCodeRejectedError when GitHub rejects the code with HTTP 200 + error body', async () => {
+    // GitHub answers a bad, used or expired code with 200 and an `error` field, not with 400.
+    fetchMock.mockResolvedValueOnce(
+      json({
+        error: 'bad_verification_code',
+        error_description: 'The code passed is incorrect or expired.',
+      }),
+    );
+    const client = new OAuthProviderClient(loadEnv(withProviders));
+    const error = await client.fetchProfile('github', 'used-code').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(OAuthCodeRejectedError);
+    expect(error).toMatchObject({ providerCode: 'bad_verification_code' });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no profile request after a rejected code
+  });
+
   it('fails (not OAuthCodeRejectedError) when the GitHub API errors', async () => {
     fetchMock
       .mockResolvedValueOnce(json({ access_token: 'gh-at', token_type: 'bearer', scope: '' }))
