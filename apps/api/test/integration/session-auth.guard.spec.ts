@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Req, Res } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { ErrorCode } from '@kora/shared';
 import type { Request, Response } from 'express';
@@ -17,6 +18,8 @@ import { CryptoService } from '../../src/infra/crypto/crypto.service';
 import { PrismaModule } from '../../src/infra/prisma/prisma.module';
 import { RedisModule } from '../../src/infra/redis/redis.module';
 import { AuthModule } from '../../src/modules/auth/auth.module';
+import { MailModule } from '../../src/infra/mail/mail.module';
+import { QueueModule } from '../../src/infra/queue/queue.module';
 import type { AuthUser } from '../../src/modules/auth/auth.types';
 import { SessionService } from '../../src/modules/auth/session.service';
 import { createUser } from '../setup/factories';
@@ -70,7 +73,16 @@ describe('SessionAuthGuard (real Postgres + Redis)', () => {
   beforeAll(async () => {
     await getPrisma(); // sets this worker's container env before modules read it
     const mod = await Test.createTestingModule({
-      imports: [ConfigModule, PrismaModule, RedisModule, CryptoModule, AuthModule],
+      imports: [
+        ConfigModule,
+        EventEmitterModule.forRoot(),
+        PrismaModule,
+        RedisModule,
+        CryptoModule,
+        QueueModule,
+        MailModule,
+        AuthModule,
+      ],
       controllers: [ProbeController, PublicController],
       providers: [
         { provide: APP_GUARD, useClass: SessionAuthGuard },
@@ -144,6 +156,7 @@ describe('SessionAuthGuard (real Postgres + Redis)', () => {
       user: {
         id: user.id,
         email: user.email,
+        emailVerifiedAt: user.emailVerifiedAt!.toISOString(),
         name: 'Grace',
         locale: 'en',
         theme: 'system',

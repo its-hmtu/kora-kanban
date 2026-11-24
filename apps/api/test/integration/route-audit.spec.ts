@@ -14,7 +14,7 @@ import { closeHarness, createTestApp } from '../setup/test-app';
  * Routes that are authenticated-only by design: any signed-in user may call them and they name no
  * resource to check a permission against. Entries are `Controller.method`. Keep this list short.
  */
-const AUTHENTICATED_ONLY: readonly string[] = [];
+const AUTHENTICATED_ONLY: readonly string[] = ['AuthController.logout', 'AuthController.logoutAll'];
 
 /** Every controller route in the app that has neither `@Public()` nor `@RequirePermission(...)`. */
 function unguardedRoutes(app: INestApplication): string[] {

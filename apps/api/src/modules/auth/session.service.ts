@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ErrorCode } from '@kora/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import type { Redis } from 'ioredis';
@@ -9,6 +10,7 @@ import { CryptoService } from '../../infra/crypto/crypto.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { REDIS } from '../../infra/redis/redis.module';
 import { AUTH_USER_SELECT, type AuthContext, type SessionInfo } from './auth.types';
+import { SESSION_REVOKED_EVENT, SessionRevokedEvent } from './session-revoked.event';
 
 export const SESSION_COOKIE = 'kora_sid';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -46,6 +48,7 @@ export class SessionService {
     private readonly crypto: CryptoService,
     @Inject(APP_CONFIG) private readonly config: Env,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly events: EventEmitter2,
   ) {}
 
   /** Creates a session and returns the raw token (for the cookie only). */
@@ -127,10 +130,19 @@ export class SessionService {
     return { session, user, refreshed };
   }
 
-  /** Signs out one session. Unknown tokens are ignored. */
+  /** Signs out one session and emits `SessionRevokedEvent`. Unknown tokens are ignored. */
   async revoke(token: string): Promise<void> {
     if (!token || token.length > MAX_TOKEN_LENGTH) return;
-    await this.removeByHashes([this.crypto.sha256(token)]);
+    const hash = this.crypto.sha256(token);
+    // Row first, then cache key (see removeByHashes); RETURNING names the session for the event.
+    const rows = await this.prisma.client.$queryRaw<{ id: string; userId: string }[]>`
+      DELETE FROM "Session" WHERE "tokenHash" = ${hash} RETURNING "id", "userId"`;
+    await this.redis.del(this.cacheKey(hash));
+    for (const row of rows) {
+      this.emitRevoked(
+        new SessionRevokedEvent({ userId: row.userId, sessionId: row.id, all: false }),
+      );
+    }
   }
 
   /** "Sign out all devices": deletes every session of the user and their cache entries. */
@@ -139,6 +151,7 @@ export class SessionService {
     const rows = await this.prisma.client.$queryRaw<{ tokenHash: string }[]>`
       DELETE FROM "Session" WHERE "userId" = ${userId}::uuid RETURNING "tokenHash"`;
     if (rows.length) await this.redis.del(...rows.map((r) => this.cacheKey(r.tokenHash)));
+    this.emitRevoked(new SessionRevokedEvent({ userId, all: true }));
   }
 
   /** Replaces a valid session with a fresh one for the same user; returns the new raw token. */
@@ -171,6 +184,10 @@ export class SessionService {
   private async removeByHashes(hashes: string[]): Promise<void> {
     await this.prisma.client.session.deleteMany({ where: { tokenHash: { in: hashes } } });
     await this.redis.del(...hashes.map((h) => this.cacheKey(h)));
+  }
+
+  private emitRevoked(event: SessionRevokedEvent): void {
+    this.events.emit(SESSION_REVOKED_EVENT, event);
   }
 
   private cacheKey(hash: string): string {

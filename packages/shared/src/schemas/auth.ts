@@ -30,6 +30,9 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+export const verifyEmailSchema = z.object({ token: z.string().min(1).max(128) });
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
 export const forgotSchema = z.object({ email });
 export type ForgotInput = z.infer<typeof forgotSchema>;
 

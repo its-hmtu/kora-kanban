@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggerModule } from 'nestjs-pino';
 import { AccessModule } from './common/access/access.module';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
@@ -40,6 +41,7 @@ const TEST_ONLY_MODULES = process.env.NODE_ENV === 'test' ? [TestResetModule] : 
       inject: [APP_CONFIG],
       useFactory: (config: Env) => buildLoggerParams(config.NODE_ENV),
     }),
+    EventEmitterModule.forRoot(),
     PrismaModule,
     RedisModule,
     CryptoModule,

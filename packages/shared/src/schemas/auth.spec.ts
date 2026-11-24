@@ -6,6 +6,7 @@ import {
   registerSchema,
   resetSchema,
   updateMeSchema,
+  verifyEmailSchema,
 } from './auth';
 
 const good = { email: 'A@Example.com', password: 'correct-horse-1', name: 'Ada' };
@@ -100,5 +101,14 @@ describe('updateMeSchema', () => {
     expect(updateMeSchema.safeParse({ theme: 'neon' }).success).toBe(false);
     expect(updateMeSchema.safeParse({ timezone: 'Mars/Olympus' }).success).toBe(false);
     expect(updateMeSchema.safeParse({ timezone: '' }).success).toBe(false);
+  });
+});
+
+describe('verifyEmailSchema', () => {
+  it('requires a non-empty token of at most 128 chars', () => {
+    expect(verifyEmailSchema.parse({ token: 'abc' })).toEqual({ token: 'abc' });
+    expect(verifyEmailSchema.safeParse({ token: '' }).success).toBe(false);
+    expect(verifyEmailSchema.safeParse({ token: 'x'.repeat(129) }).success).toBe(false);
+    expect(verifyEmailSchema.safeParse({}).success).toBe(false);
   });
 });

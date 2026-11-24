@@ -4,7 +4,14 @@ import type { Env } from '../../infra/config/env';
 import { SessionService, systemClock } from './session.service';
 
 const svcFor = (NODE_ENV: Env['NODE_ENV']) =>
-  new SessionService(null as never, null as never, null as never, { NODE_ENV } as Env, systemClock);
+  new SessionService(
+    null as never,
+    null as never,
+    null as never,
+    { NODE_ENV } as Env,
+    systemClock,
+    null as never,
+  );
 
 function fakeResponse() {
   const calls: { fn: string; args: unknown[] }[] = [];

@@ -1,4 +1,5 @@
 import { ErrorCode } from '@kora/shared';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Redis } from 'ioredis';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DomainError } from '../../src/common/errors/domain-error';
@@ -11,6 +12,10 @@ import {
   SessionService,
   type SessionRequestInfo,
 } from '../../src/modules/auth/session.service';
+import {
+  SESSION_REVOKED_EVENT,
+  SessionRevokedEvent,
+} from '../../src/modules/auth/session-revoked.event';
 import { createUser } from '../setup/factories';
 import { closeHarness, getPrisma, getRedis, resetDb } from '../setup/test-app';
 
@@ -26,6 +31,7 @@ describe('SessionService (real Postgres + Redis)', () => {
   let crypto: CryptoService;
   let svc: SessionService;
   let now: Date;
+  let revoked: SessionRevokedEvent[];
   const advance = (ms: number) => {
     now = new Date(now.getTime() + ms);
   };
@@ -36,11 +42,14 @@ describe('SessionService (real Postgres + Redis)', () => {
     redis = await getRedis();
     const env = loadEnv();
     crypto = new CryptoService(env);
-    svc = new SessionService(prisma, redis, crypto, env, { now: () => now });
+    const events = new EventEmitter2();
+    events.on(SESSION_REVOKED_EVENT, (event: SessionRevokedEvent) => revoked.push(event));
+    svc = new SessionService(prisma, redis, crypto, env, { now: () => now }, events);
   });
   beforeEach(async () => {
     await resetDb();
     now = T0;
+    revoked = [];
   });
   afterEach(() => vi.restoreAllMocks());
   afterAll(closeHarness);
@@ -77,6 +86,7 @@ describe('SessionService (real Postgres + Redis)', () => {
     expect(ctx?.user).toEqual({
       id: user.id,
       email: user.email,
+      emailVerifiedAt: user.emailVerifiedAt,
       name: 'Ada',
       locale: 'en',
       theme: 'system',
@@ -293,5 +303,35 @@ describe('SessionService (real Postgres + Redis)', () => {
     advance(31 * DAY);
     await expect(svc.rotate(token, req)).rejects.toBeInstanceOf(DomainError);
     expect(await prisma.client.session.count({ where: { expiresAt: { gt: now } } })).toBe(0);
+  });
+
+  it('revoke: emits SessionRevokedEvent for the revoked session only (none for unknown tokens)', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    const session = (await svc.validate(token))!.session;
+    await svc.revoke(token);
+    await svc.revoke(token);
+    await svc.revoke('unknown');
+    expect(revoked).toEqual([
+      new SessionRevokedEvent({ userId: user.id, sessionId: session.id, all: false }),
+    ]);
+  });
+
+  it('revokeAllForUser: emits one SessionRevokedEvent with all: true', async () => {
+    const user = await createUser();
+    await svc.create(user.id, req);
+    await svc.create(user.id, req);
+    await svc.revokeAllForUser(user.id);
+    expect(revoked).toEqual([new SessionRevokedEvent({ userId: user.id, all: true })]);
+  });
+
+  it('rotate: emits SessionRevokedEvent for the old session', async () => {
+    const user = await createUser();
+    const old = await svc.create(user.id, req);
+    const oldId = (await svc.validate(old))!.session.id;
+    await svc.rotate(old, req);
+    expect(revoked).toEqual([
+      new SessionRevokedEvent({ userId: user.id, sessionId: oldId, all: false }),
+    ]);
   });
 });

@@ -4,6 +4,7 @@ import type { Prisma } from '../../generated/prisma/client';
 export const AUTH_USER_SELECT = {
   id: true,
   email: true,
+  emailVerifiedAt: true,
   name: true,
   locale: true,
   theme: true,

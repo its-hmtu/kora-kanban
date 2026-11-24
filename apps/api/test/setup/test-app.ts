@@ -87,6 +87,8 @@ export const getRedis = async (): Promise<Redis> => (await get()).redis;
 export interface CreateTestAppOptions {
   /** Extra (probe) controllers mounted next to AppModule's own routes. */
   controllers?: Type[];
+  /** Providers to replace by value, e.g. `{ provide: CLOCK, useValue: fakeClock }`. */
+  overrides?: { provide: unknown; useValue: unknown }[];
 }
 
 /**
@@ -99,10 +101,14 @@ export async function createTestApp(
 ): Promise<NestExpressApplication> {
   if (testApp) throw new Error('createTestApp() was already called in this file');
   await get(); // sets the worker env that ConfigModule validates at boot
-  const moduleRef = await Test.createTestingModule({
+  const builder = Test.createTestingModule({
     imports: [AppModule],
     controllers: options.controllers ?? [],
-  }).compile();
+  });
+  for (const { provide, useValue } of options.overrides ?? []) {
+    builder.overrideProvider(provide).useValue(useValue);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
   configureApp(app, app.get<Env>(APP_CONFIG));
   await app.init();

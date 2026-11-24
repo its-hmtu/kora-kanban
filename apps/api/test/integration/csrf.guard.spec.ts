@@ -1,6 +1,7 @@
 import { Controller, Delete, Get, Patch, Post, Put } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { ErrorCode } from '@kora/shared';
 import request from 'supertest';
@@ -16,6 +17,8 @@ import { CryptoModule } from '../../src/infra/crypto/crypto.module';
 import { PrismaModule } from '../../src/infra/prisma/prisma.module';
 import { RedisModule } from '../../src/infra/redis/redis.module';
 import { AuthModule } from '../../src/modules/auth/auth.module';
+import { MailModule } from '../../src/infra/mail/mail.module';
+import { QueueModule } from '../../src/infra/queue/queue.module';
 import { SessionService } from '../../src/modules/auth/session.service';
 import { createUser } from '../setup/factories';
 import { closeHarness, getPrisma, resetDb } from '../setup/test-app';
@@ -76,7 +79,16 @@ describe('CsrfGuard + GET /auth/csrf (guards in order SessionAuth → Csrf)', ()
   beforeAll(async () => {
     await getPrisma(); // sets this worker's container env before modules read it
     const mod = await Test.createTestingModule({
-      imports: [ConfigModule, PrismaModule, RedisModule, CryptoModule, AuthModule],
+      imports: [
+        ConfigModule,
+        EventEmitterModule.forRoot(),
+        PrismaModule,
+        RedisModule,
+        CryptoModule,
+        QueueModule,
+        MailModule,
+        AuthModule,
+      ],
       controllers: [ProbeController],
       providers: [
         { provide: APP_GUARD, useClass: SessionAuthGuard },
