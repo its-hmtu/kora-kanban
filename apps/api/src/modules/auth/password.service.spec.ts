@@ -39,6 +39,12 @@ describe('PasswordService', () => {
     });
   });
 
+  it('assertNotBreached reports the error under the given field name', async () => {
+    await expect(svc.assertNotBreached('password', 'newPassword')).rejects.toMatchObject({
+      details: { fieldErrors: { newPassword: ['PASSWORD_BREACHED'] } },
+    });
+  });
+
   it('assertNotBreached resolves for an unbreached password', async () => {
     await expect(svc.assertNotBreached('zk3-Vq9!unlikely-passphrase-77')).resolves.toBeUndefined();
   });

@@ -29,6 +29,11 @@ describe('registerSchema', () => {
   it('rejects invalid email', () => {
     expect(registerSchema.safeParse({ ...good, email: 'nope' }).success).toBe(false);
   });
+  it('trims the name before the length checks', () => {
+    expect(registerSchema.parse({ ...good, name: '  Ada  ' }).name).toBe('Ada');
+    expect(registerSchema.safeParse({ ...good, name: '   ' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...good, name: ` ${'n'.repeat(100)} ` }).success).toBe(true);
+  });
 });
 
 describe('loginSchema', () => {
@@ -57,6 +62,11 @@ describe('resetSchema', () => {
     expect(resetSchema.safeParse({ token: 't', password: 'correct-horse-1' }).success).toBe(true);
     expect(resetSchema.safeParse({ token: '', password: 'correct-horse-1' }).success).toBe(false);
     expect(resetSchema.safeParse({ token: 't', password: 'short' }).success).toBe(false);
+  });
+  it('caps the token at 128 chars', () => {
+    const password = 'correct-horse-1';
+    expect(resetSchema.safeParse({ token: 'x'.repeat(128), password }).success).toBe(true);
+    expect(resetSchema.safeParse({ token: 'x'.repeat(129), password }).success).toBe(false);
   });
 });
 
@@ -101,6 +111,17 @@ describe('updateMeSchema', () => {
     expect(updateMeSchema.safeParse({ theme: 'neon' }).success).toBe(false);
     expect(updateMeSchema.safeParse({ timezone: 'Mars/Olympus' }).success).toBe(false);
     expect(updateMeSchema.safeParse({ timezone: '' }).success).toBe(false);
+  });
+  it('trims the name before the length checks', () => {
+    expect(updateMeSchema.parse({ name: '  Ada ' })).toEqual({ name: 'Ada' });
+    expect(updateMeSchema.safeParse({ name: '  ' }).success).toBe(false);
+  });
+  it('accepts only exact supported time zone ids (plus UTC)', () => {
+    expect(updateMeSchema.safeParse({ timezone: 'UTC' }).success).toBe(true);
+    expect(updateMeSchema.safeParse({ timezone: 'America/New_York' }).success).toBe(true);
+    for (const timezone of ['europe/paris', 'EUROPE/PARIS', 'utc', '+01:00', '-0500', ' UTC']) {
+      expect(updateMeSchema.safeParse({ timezone }).success, timezone).toBe(false);
+    }
   });
 });
 

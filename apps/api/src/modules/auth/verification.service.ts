@@ -13,6 +13,10 @@ export const VERIFICATION_TTL_MS: Record<VerificationTokenType, number> = {
   password_reset: HOUR_MS,
 };
 
+/** 422 `fieldErrors.token ['TOKEN_INVALID']`: unknown, expired, used and wrong-type look alike. */
+export const tokenInvalid = () =>
+  new DomainError(ErrorCode.VALIDATION, 422, { fieldErrors: { token: ['TOKEN_INVALID'] } });
+
 @Injectable()
 export class VerificationService {
   constructor(
@@ -58,6 +62,3 @@ export class VerificationService {
     return { userId: row.userId };
   }
 }
-
-const tokenInvalid = () =>
-  new DomainError(ErrorCode.VALIDATION, 422, { fieldErrors: { token: ['TOKEN_INVALID'] } });

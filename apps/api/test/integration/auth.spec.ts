@@ -1,14 +1,15 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ErrorCode } from '@kora/shared';
 import type { Job, Queue } from 'bullmq';
 import request, { type Response } from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CurrentUser } from '../../src/common/decorators/current-user.decorator';
 import { APP_CONFIG } from '../../src/infra/config/config.module';
 import type { Env } from '../../src/infra/config/env';
+import { MailService } from '../../src/infra/mail/mail.service';
 import type { EmailJob } from '../../src/infra/mail/mail.types';
 import type { PrismaService } from '../../src/infra/prisma/prisma.service';
 import type { AuthUser } from '../../src/modules/auth/auth.types';
@@ -17,7 +18,7 @@ import {
   SESSION_REVOKED_EVENT,
   SessionRevokedEvent,
 } from '../../src/modules/auth/session-revoked.event';
-import { CLOCK, type Clock } from '../../src/modules/auth/session.service';
+import { CLOCK, SessionService, type Clock } from '../../src/modules/auth/session.service';
 import { VerificationService } from '../../src/modules/auth/verification.service';
 import { createUser } from '../setup/factories';
 import { agentFor, closeHarness, createTestApp, getPrisma, resetDb } from '../setup/test-app';
@@ -56,6 +57,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   clockOffset = 0;
   await resetDb();
+});
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 afterAll(closeHarness);
 
@@ -319,6 +323,51 @@ describe('POST /auth/login', () => {
     await agent.get(`${API}/t/me`).expect(200, { id: user.id });
   });
 
+  describe('login racing a concurrent revocation', () => {
+    /** Runs `concurrent` after the password was verified but before the session row exists. */
+    function interleave(concurrent: (userId: string) => Promise<unknown>) {
+      const sessions = app.get(SessionService);
+      const create = sessions.create.bind(sessions);
+      vi.spyOn(sessions, 'create').mockImplementationOnce(async (userId, req) => {
+        await concurrent(userId);
+        return create(userId, req);
+      });
+    }
+
+    it('a password reset/change that revoked everything mid-login → 401 and no session survives', async () => {
+      await userWithPassword({ email: 'race@example.com' });
+      const newHash = await app.get(PasswordService).hash('changed meanwhile phrase');
+      interleave(async (userId) => {
+        await prisma.client.user.update({ where: { id: userId }, data: { passwordHash: newHash } });
+        await app.get(SessionService).revokeAllForUser(userId);
+      });
+      const res = await login('race@example.com');
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual(UNAUTH);
+      expect(setCookies(res, 'kora_sid')).toEqual([]);
+      expect(setCookies(res, 'kora_csrf')).toEqual([]);
+      expect(await prisma.client.session.count()).toBe(0);
+    });
+
+    it('an OAuth takeover that cleared the password mid-login → 401', async () => {
+      await userWithPassword({ email: 'race-oauth@example.com' });
+      interleave((userId) =>
+        prisma.client.user.update({ where: { id: userId }, data: { passwordHash: null } }),
+      );
+      expect((await login('race-oauth@example.com')).status).toBe(401);
+      expect(await prisma.client.session.count()).toBe(0);
+    });
+
+    it('an account deleted mid-login → 401', async () => {
+      await userWithPassword({ email: 'race-del@example.com' });
+      interleave((userId) =>
+        prisma.client.user.update({ where: { id: userId }, data: { deletedAt: new Date() } }),
+      );
+      expect((await login('race-del@example.com')).status).toBe(401);
+      expect(await prisma.client.session.count()).toBe(0);
+    });
+  });
+
   it('without a CSRF token → 403 (login CSRF protection)', async () => {
     await userWithPassword({ email: 'csrf@example.com' });
     const agent = await anonAgent();
@@ -433,13 +482,32 @@ describe('POST /auth/password/forgot', () => {
     });
     expect(tokenFrom(jobs[0], '/reset-password')).toMatch(/^[\w-]{43}$/);
   });
+
+  it('still returns 204 when issuing the token or enqueueing the email fails', async () => {
+    await createUser({ email: 'flaky@example.com' });
+    const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    vi.spyOn(app.get(VerificationService), 'issue').mockRejectedValueOnce(new Error('db down'));
+    vi.spyOn(app.get(MailService), 'send').mockRejectedValueOnce(new Error('redis down'));
+    for (let i = 0; i < 2; i++) {
+      const res = await (
+        await anonAgent()
+      )
+        .post(`${API}/auth/password/forgot`)
+        .send({ email: 'flaky@example.com' });
+      expect(res.status).toBe(204);
+    }
+    expect(await emailJobs()).toEqual([]);
+    expect(logged).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('POST /auth/password/reset', () => {
   async function requestReset(email: string): Promise<string> {
+    const before = new Set((await emailJobs()).map((job) => job.props.url));
     await (await anonAgent()).post(`${API}/auth/password/forgot`).send({ email }).expect(204);
-    const jobs = await emailJobs();
-    return tokenFrom(jobs[jobs.length - 1], '/reset-password');
+    const added = (await emailJobs()).filter((job) => !before.has(job.props.url));
+    expect(added).toHaveLength(1);
+    return tokenFrom(added[0], '/reset-password');
   }
   const reset = async (token: string, password: string) =>
     (await anonAgent()).post(`${API}/auth/password/reset`).send({ token, password });
@@ -499,6 +567,31 @@ describe('POST /auth/password/reset', () => {
     expect(weak.status).toBe(422);
     expect(weak.body.error.details).toEqual({ fieldErrors: { password: ['PASSWORD_BREACHED'] } });
     expect((await reset(token, 'a much stronger phrase')).status).toBe(204);
+  });
+
+  it('marks an unverified email verified (the link proved inbox control); keeps an earlier timestamp', async () => {
+    const user = await userWithPassword({ email: 'unver@example.com', emailVerifiedAt: null });
+    expect(
+      (await reset(await requestReset('unver@example.com'), 'fresh passphrase one')).status,
+    ).toBe(204);
+    const after = await prisma.client.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.emailVerifiedAt).toBeInstanceOf(Date);
+
+    const verifiedAt = new Date('2025-01-01T00:00:00Z');
+    const old = await userWithPassword({ email: 'ver@example.com', emailVerifiedAt: verifiedAt });
+    expect(
+      (await reset(await requestReset('ver@example.com'), 'fresh passphrase two')).status,
+    ).toBe(204);
+    const kept = await prisma.client.user.findUniqueOrThrow({ where: { id: old.id } });
+    expect(kept.emailVerifiedAt).toEqual(verifiedAt);
+  });
+
+  it('does not hash the password for an invalid token (no anonymous argon2 work)', async () => {
+    const hash = vi.spyOn(app.get(PasswordService), 'hash');
+    const res = await reset('not-a-real-token', 'some new passphrase');
+    expect(res.status).toBe(422);
+    expect(res.body.error.details).toEqual({ fieldErrors: { token: ['TOKEN_INVALID'] } });
+    expect(hash).not.toHaveBeenCalled();
   });
 
   it('rejects an email-verification token', async () => {

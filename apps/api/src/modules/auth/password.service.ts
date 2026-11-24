@@ -36,11 +36,11 @@ export class PasswordService {
     return (await this.loadCommon()).has(password.toLowerCase());
   }
 
-  /** Throws a 422 `PASSWORD_BREACHED` field error when the password is in the common list. */
-  async assertNotBreached(password: string): Promise<void> {
+  /** Throws a 422 `PASSWORD_BREACHED` error on `field` when the password is in the common list. */
+  async assertNotBreached(password: string, field = 'password'): Promise<void> {
     if (await this.isBreached(password)) {
       throw new DomainError(ErrorCode.VALIDATION, 422, {
-        fieldErrors: { password: ['PASSWORD_BREACHED'] },
+        fieldErrors: { [field]: ['PASSWORD_BREACHED'] },
       });
     }
   }

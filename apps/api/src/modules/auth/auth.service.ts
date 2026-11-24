@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
   ErrorCode,
   type ForgotInput,
@@ -18,20 +18,19 @@ import { AUTH_USER_SELECT, type AuthUser } from './auth.types';
 import { CsrfTokenService } from './csrf-token.service';
 import { PasswordService } from './password.service';
 import { CLOCK, SESSION_COOKIE, SessionService, type Clock } from './session.service';
-import { VerificationService } from './verification.service';
+import { tokenInvalid, VerificationService } from './verification.service';
 
 /** Hashed once (same argon2 parameters) so a login for a missing user costs a real verify. */
 const DUMMY_PASSWORD = 'kora-dummy-password-for-timing';
 
 const emailTaken = () =>
   new DomainError(ErrorCode.VALIDATION, 422, { fieldErrors: { email: ['EMAIL_TAKEN'] } });
-const tokenInvalid = () =>
-  new DomainError(ErrorCode.VALIDATION, 422, { fieldErrors: { token: ['TOKEN_INVALID'] } });
 const unauthenticated = () => new DomainError(ErrorCode.UNAUTHENTICATED, 401);
 
 /** Email/password accounts (US1): sign-up, sign-in, sign-out, email verification, reset. */
 @Injectable()
 export class AuthService implements OnModuleInit {
+  private readonly logger = new Logger(AuthService.name);
   private dummyHash?: Promise<string>;
 
   constructor(
@@ -46,7 +45,10 @@ export class AuthService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    void this.getDummyHash(); // warm up so even the first unknown-email login takes full time
+    // Warm up so even the first unknown-email login takes full time; a failure is retried later.
+    this.getDummyHash().catch((error: unknown) => {
+      this.logger.error({ err: error }, 'Precomputing the dummy password hash failed');
+    });
   }
 
   /** Creates the account, signs it in and sends the verification email. */
@@ -87,21 +89,30 @@ export class AuthService implements OnModuleInit {
     const { passwordHash, ...user } = found;
     if (!passwordHash) return this.rejectLogin(input.password);
     if (!(await this.passwords.verify(passwordHash, input.password))) throw unauthenticated();
-    await this.signIn(user.id, req, res);
+
+    const token = await this.startSession(user.id, req);
+    // A reset, password change, OAuth takeover or deletion may have revoked every session after
+    // we verified the old hash but before our row existed. Those writes change the user row before
+    // revoking, so re-reading it now catches every such interleaving.
+    const current = await this.prisma.client.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true, deletedAt: true },
+    });
+    if (current?.passwordHash !== passwordHash || current.deletedAt) {
+      await this.sessions.revoke(token);
+      throw unauthenticated();
+    }
+    this.setSignInCookies(res, token);
     return user;
   }
 
   /**
    * Starts a session for `userId`: ends any session the browser already carried, sets a new
    * `kora_sid` and issues a fresh CSRF token (both defend against fixation). Every sign-in path
-   * (password, OAuth) must go through here.
+   * (password, OAuth) and session rotation (password change) must go through here.
    */
   async signIn(userId: string, req: Request, res: Response): Promise<void> {
-    const previous: unknown = req.cookies?.[SESSION_COOKIE];
-    if (typeof previous === 'string' && previous !== '') await this.sessions.revoke(previous);
-    const token = await this.sessions.create(userId, req);
-    this.sessions.setSessionCookie(res, token);
-    this.csrfTokens.issue(res);
+    this.setSignInCookies(res, await this.startSession(userId, req));
   }
 
   /** Ends the current session and clears the session and CSRF cookies. */
@@ -126,33 +137,51 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  /** Always succeeds (no account enumeration); emails a reset link when the account exists. */
+  /**
+   * Always succeeds (no account enumeration); emails a reset link when the account exists. A
+   * failure to issue or enqueue is logged, not surfaced: a 500 only for real accounts would leak.
+   */
   async forgotPassword({ email }: ForgotInput): Promise<void> {
     const user = await this.prisma.client.user.findFirst({
       where: { email, deletedAt: null },
       select: { id: true, email: true, name: true, locale: true },
     });
     if (!user) return;
-    const token = await this.verifications.issue(user.id, 'password_reset');
-    await this.mail.send({
-      to: user.email,
-      template: 'reset-password',
-      props: { name: user.name, url: this.link('/reset-password', token) },
-      locale: resolveLocale(user.locale, undefined),
-    });
+    try {
+      const token = await this.verifications.issue(user.id, 'password_reset');
+      await this.mail.send({
+        to: user.email,
+        template: 'reset-password',
+        props: { name: user.name, url: this.link('/reset-password', token) },
+        locale: resolveLocale(user.locale, undefined),
+      });
+    } catch (error) {
+      this.logger.error({ err: error, userId: user.id }, 'Sending the password reset email failed');
+    }
   }
 
-  /** Sets a new password and signs out every session. Does not sign in. */
+  /**
+   * Sets a new password, marks the email verified (the link proved inbox control) and signs out
+   * every session. Does not sign in.
+   */
   async resetPassword({ token, password }: ResetInput): Promise<void> {
-    // Check the password first so a rejected one does not spend the token.
+    // Check the password first so a rejected one does not spend the token, but hash only after
+    // the token is accepted so invalid tokens cannot buy anonymous argon2 work.
     await this.passwords.assertNotBreached(password);
-    const passwordHash = await this.passwords.hash(password);
     const { userId } = await this.verifications.consume(token, 'password_reset');
-    const updated = await this.prisma.client.user.updateMany({
-      where: { id: userId, deletedAt: null },
-      data: { passwordHash },
-    });
-    if (updated.count !== 1) throw tokenInvalid();
+    const passwordHash = await this.passwords.hash(password);
+    const now = this.clock.now();
+    const updated = await this.prisma.client.$transaction([
+      this.prisma.client.user.updateMany({
+        where: { id: userId, deletedAt: null },
+        data: { passwordHash },
+      }),
+      this.prisma.client.user.updateMany({
+        where: { id: userId, deletedAt: null, emailVerifiedAt: null },
+        data: { emailVerifiedAt: now },
+      }),
+    ]);
+    if (updated[0].count !== 1) throw tokenInvalid();
     await this.sessions.revokeAllForUser(userId);
   }
 
@@ -170,6 +199,18 @@ export class AuthService implements OnModuleInit {
     return `${this.config.APP_URL.replace(/\/+$/, '')}${path}?token=${encodeURIComponent(token)}`;
   }
 
+  /** Ends the session the browser already carried (fixation) and creates a new one. */
+  private async startSession(userId: string, req: Request): Promise<string> {
+    const previous: unknown = req.cookies?.[SESSION_COOKIE];
+    if (typeof previous === 'string' && previous !== '') await this.sessions.revoke(previous);
+    return this.sessions.create(userId, req);
+  }
+
+  private setSignInCookies(res: Response, token: string): void {
+    this.sessions.setSessionCookie(res, token);
+    this.csrfTokens.issue(res);
+  }
+
   private clearCookies(res: Response): void {
     this.sessions.clearSessionCookie(res);
     this.csrfTokens.clear(res);
@@ -181,8 +222,15 @@ export class AuthService implements OnModuleInit {
     throw unauthenticated();
   }
 
+  /** Cached; a rejected hash is dropped from the cache so the next login retries it. */
   private getDummyHash(): Promise<string> {
-    this.dummyHash ??= this.passwords.hash(DUMMY_PASSWORD);
+    if (!this.dummyHash) {
+      const pending = this.passwords.hash(DUMMY_PASSWORD);
+      this.dummyHash = pending;
+      pending.catch(() => {
+        if (this.dummyHash === pending) this.dummyHash = undefined;
+      });
+    }
     return this.dummyHash;
   }
 }
