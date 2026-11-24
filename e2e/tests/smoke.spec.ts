@@ -1,15 +1,20 @@
-import { expect, resetDb, test } from '../fixtures';
+import { expect, signUpAndLogin, test, uniqueEmail } from '../fixtures';
 
-// Proves the e2e wiring: both web servers start, baseURL resolves, the SPA renders, and the API
-// (behind the Vite proxy, NODE_ENV=test) accepts CSRF-protected requests.
+// Proves the e2e wiring: the web servers start (global-setup resets the data once), baseURL
+// resolves, the SPA renders, and the API (behind the Vite proxy, NODE_ENV=test) accepts
+// CSRF-protected requests.
 
 test('the login page renders', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
-test('resetDb wipes data through the test-only endpoint', async ({ request }) => {
-  await resetDb(request);
+test('signUpAndLogin leaves the browser context signed in', async ({ page }, testInfo) => {
+  const email = uniqueEmail(testInfo);
+  const user = await signUpAndLogin(page, { email, name: 'Smoke User' });
+  expect(user.email).toBe(email);
+  await page.goto('/');
+  await expect(page.getByTestId('top-bar')).toContainText('Smoke User');
 });
 
 test('twoUsers are independent browser contexts', async ({ twoUsers: { alice, bob } }) => {

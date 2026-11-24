@@ -1,8 +1,17 @@
-import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
+import {
+  test as base,
+  expect,
+  type APIRequestContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 
 /**
  * Shared Playwright fixtures (T046). All API calls go through the web origin (the Vite dev server
  * proxies `/api` to the API), so cookies land where the browser expects them.
+ *
+ * Data policy: tests run fully parallel against one API and database, which is wiped once per run
+ * (global-setup.ts), never per test. Every test creates its own data, e.g. `uniqueEmail(testInfo)`.
  */
 
 /** Must equal the API's APP_URL: CsrfGuard requires `Origin` to match it on every POST. */
@@ -35,30 +44,30 @@ async function apiPost(request: APIRequestContext, path: string, data?: unknown)
 
 /**
  * Wipes the database and Redis via the test-only `POST /api/v1/__test/reset` (mounted only when
- * the API runs with NODE_ENV=test). Affects every test using the same API, so call it only where
- * tests cannot run concurrently against shared data.
+ * the API runs with NODE_ENV=test). Called once per run from global-setup.ts; never from a test,
+ * since tests run in parallel against the same data.
  */
 export async function resetDb(request: APIRequestContext): Promise<void> {
   await apiPost(request, '/__test/reset');
 }
 
+/** An email address no other test (or earlier run) uses, e.g. `<testId>-<time>@e2e.test`. */
+export function uniqueEmail(testInfo: TestInfo): string {
+  return `${testInfo.testId}-${Date.now()}@e2e.test`;
+}
+
 /**
- * Registers `{email, name}` and signs in, leaving the `kora_sid` session cookie in `page`'s
- * browser context.
- *
- * NOT YET EXERCISED: written against the planned contract (contracts/rest-api.md, Auth & account:
- * `POST /auth/register {email, password, name}` → 201, `POST /auth/login {email, password}` →
- * `{user}` + cookie). The endpoints arrive with US1; revisit once they exist (e.g. if login
- * requires a verified email).
+ * Registers `{email, name}` through `POST /auth/register`, which signs the new (unverified) user
+ * in: the `kora_sid` session cookie lands in `page`'s browser context.
  */
 export async function signUpAndLogin(
   page: Page,
   { email, name }: { email: string; name: string },
 ): Promise<E2EUser> {
-  await apiPost(page.request, '/auth/register', { email, password: E2E_PASSWORD, name });
-  const { user } = (await apiPost(page.request, '/auth/login', {
+  const { user } = (await apiPost(page.request, '/auth/register', {
     email,
     password: E2E_PASSWORD,
+    name,
   })) as { user: E2EUser };
   return user;
 }

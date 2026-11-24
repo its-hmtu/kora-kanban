@@ -10,7 +10,7 @@
     "e2e": {
       "dependsOn": ["@kora/api#build"],
       "cache": false,
-      "passThroughEnv": ["CI", "E2E_DATABASE_URL", "E2E_REDIS_URL", "PLAYWRIGHT_*"]
+      "passThroughEnv": ["CI", "E2E_DATABASE_URL", "E2E_REDIS_URL", "SMTP_URL", "PLAYWRIGHT_*"]
     }
   }
 }

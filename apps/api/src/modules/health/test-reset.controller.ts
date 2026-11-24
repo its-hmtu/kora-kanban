@@ -8,8 +8,8 @@ import { REDIS } from '../../infra/redis/redis.module';
 import { resetAppData } from './reset-app-data';
 
 /**
- * Test-only: `POST /api/v1/__test/reset` wipes the database and Redis between Playwright e2e tests
- * (T046). Only mounted when NODE_ENV=test (see `TestResetModule` in AppModule); the handler checks
+ * Test-only: `POST /api/v1/__test/reset` wipes the database and Redis once per Playwright e2e run
+ * (T046; e2e/global-setup.ts). Only mounted when NODE_ENV=test (see `TestResetModule` in AppModule); the handler checks
  * again so a wiring mistake can never expose it. Public, but CSRF-protected like any other POST.
  */
 @Controller('__test')

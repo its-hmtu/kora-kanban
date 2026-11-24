@@ -20,10 +20,15 @@ const apiEnv = {
   SESSION_SECRET: 'e2e-session-secret-e2e-session-secret',
   ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
   MAIL_FROM: 'Kora <noreply@kora.test>',
+  // Emails go to Mailpit (e2e/mailpit.ts reads them); blank RESEND_API_KEY forces SMTP even when
+  // apps/api/.env sets one.
+  SMTP_URL: process.env.SMTP_URL ?? 'smtp://localhost:1025',
+  RESEND_API_KEY: '',
 };
 
 export default defineConfig({
   testDir: './tests',
+  globalSetup: './global-setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -48,6 +53,14 @@ export default defineConfig({
       // Never reuse: a dev API on :3000 runs without NODE_ENV=test against the dev database.
       reuseExistingServer: false,
       timeout: 120_000,
+    },
+    {
+      // BullMQ worker (built with the API): sends the emails the API queues, to Mailpit. It has
+      // no HTTP port, so Playwright does not wait for it; queued jobs simply wait for it to start.
+      command: 'pnpm --filter @kora/api start:worker',
+      cwd: '..',
+      env: apiEnv,
+      reuseExistingServer: false,
     },
     {
       command: 'pnpm --filter @kora/web dev',
