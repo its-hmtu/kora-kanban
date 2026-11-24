@@ -226,7 +226,7 @@ integration tests only where a rule is easy to get wrong.
   - First Google login creates a user.
   - A GitHub login with a **verified** email matching an existing password account links an `OAuthAccount` and creates no new user (FR-003).
   - An **unverified** provider email is not auto-linked.
-  - A state or PKCE mismatch → 400.
+  - A state or PKCE mismatch (or any other callback failure) → redirect to `/login?error=oauth_failed`, never a raw JSON error (user decision 2026-11-24).
 
 ### Implementation for User Story 1
 

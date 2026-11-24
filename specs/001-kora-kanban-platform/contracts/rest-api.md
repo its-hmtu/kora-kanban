@@ -45,8 +45,9 @@ Legend: **[P1]** MVP … **[P4]** later. `🔓` = no auth required.
 | POST | `/auth/register` 🔓 | `{email, password, name}` → 201; sends verification email | 001 |
 | POST | `/auth/verify-email` 🔓 | `{token}` | 001 |
 | POST | `/auth/login` 🔓 | `{email, password}` → sets cookie; returns `{user}` | 005 |
+| GET | `/auth/oauth/providers` 🔓 | `{providers: ('google'\|'github')[]}` — the configured OAuth providers (web hides the others) | 002 |
 | GET | `/auth/oauth/:provider` 🔓 | Starts the Google/GitHub flow (redirect) | 002 |
-| GET | `/auth/oauth/:provider/callback` 🔓 | Completes the flow, links accounts or creates one, sets cookie | 002, 003 |
+| GET | `/auth/oauth/:provider/callback` 🔓 | Completes the flow, links accounts or creates one, sets cookie; any failure redirects to `/login?error=…` | 002, 003 |
 | POST | `/auth/logout` | Ends the current session | 007 |
 | POST | `/auth/logout-all` | Ends all sessions and disconnects sockets | 007 |
 | POST | `/auth/password/forgot` 🔓 | `{email}` → always 204 (no account enumeration) | 004 |
