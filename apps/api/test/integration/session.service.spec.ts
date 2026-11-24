@@ -325,6 +325,36 @@ describe('SessionService (real Postgres + Redis)', () => {
     expect(revoked).toEqual([new SessionRevokedEvent({ userId: user.id, all: true })]);
   });
 
+  it('revokeAllForUserInTx: deletes inside the transaction; cache and event wait for afterCommit', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    await svc.validate(token);
+
+    const afterCommit = await prisma.client.$transaction(async (tx) => {
+      const done = await svc.revokeAllForUserInTx(tx, user.id);
+      expect(revoked).toEqual([]);
+      return done;
+    });
+    expect(await prisma.client.session.count({ where: { userId: user.id } })).toBe(0);
+    expect(await redis.exists(cacheKey(token))).toBe(1);
+
+    await afterCommit();
+    expect(await redis.exists(cacheKey(token))).toBe(0);
+    expect(revoked).toEqual([new SessionRevokedEvent({ userId: user.id, all: true })]);
+  });
+
+  it('revokeAllForUserInTx: a rolled-back transaction keeps the sessions', async () => {
+    const user = await createUser();
+    const token = await svc.create(user.id, req);
+    await expect(
+      prisma.client.$transaction(async (tx) => {
+        await svc.revokeAllForUserInTx(tx, user.id);
+        throw new Error('rollback');
+      }),
+    ).rejects.toThrow('rollback');
+    expect((await svc.validate(token))?.user.id).toBe(user.id);
+  });
+
   it('rotate: emits SessionRevokedEvent for the old session', async () => {
     const user = await createUser();
     const old = await svc.create(user.id, req);

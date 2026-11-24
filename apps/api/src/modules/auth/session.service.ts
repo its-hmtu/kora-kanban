@@ -8,6 +8,7 @@ import { APP_CONFIG } from '../../infra/config/config.module';
 import type { Env } from '../../infra/config/env';
 import { CryptoService } from '../../infra/crypto/crypto.service';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import type { Prisma } from '../../generated/prisma/client';
 import { REDIS } from '../../infra/redis/redis.module';
 import { AUTH_USER_SELECT, type AuthContext, type SessionInfo } from './auth.types';
 import { SESSION_REVOKED_EVENT, SessionRevokedEvent } from './session-revoked.event';
@@ -147,11 +148,27 @@ export class SessionService {
 
   /** "Sign out all devices": deletes every session of the user and their cache entries. */
   async revokeAllForUser(userId: string): Promise<void> {
+    const afterCommit = await this.revokeAllForUserInTx(this.prisma.client, userId);
+    await afterCommit();
+  }
+
+  /**
+   * `revokeAllForUser` as part of a caller's transaction: deletes the rows with `tx` and returns
+   * `afterCommit`, which clears the cache keys and emits `SessionRevokedEvent`. Call it only after
+   * the transaction commits (clearing earlier would let a concurrent lookup re-cache a row that
+   * is still visible); skip it if the transaction rolls back.
+   */
+  async revokeAllForUserInTx(
+    tx: Pick<Prisma.TransactionClient, '$queryRaw'>,
+    userId: string,
+  ): Promise<() => Promise<void>> {
     // Delete and collect atomically so a session created mid-revocation can't keep a cache key.
-    const rows = await this.prisma.client.$queryRaw<{ tokenHash: string }[]>`
+    const rows = await tx.$queryRaw<{ tokenHash: string }[]>`
       DELETE FROM "Session" WHERE "userId" = ${userId}::uuid RETURNING "tokenHash"`;
-    if (rows.length) await this.redis.del(...rows.map((r) => this.cacheKey(r.tokenHash)));
-    this.emitRevoked(new SessionRevokedEvent({ userId, all: true }));
+    return async () => {
+      if (rows.length) await this.redis.del(...rows.map((r) => this.cacheKey(r.tokenHash)));
+      this.emitRevoked(new SessionRevokedEvent({ userId, all: true }));
+    };
   }
 
   /** Replaces a valid session with a fresh one for the same user; returns the new raw token. */
