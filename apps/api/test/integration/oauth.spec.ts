@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Controller, Get, Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { ErrorCode } from '@kora/shared';
 import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CurrentUser } from '../../src/common/decorators/current-user.decorator';
@@ -190,13 +189,34 @@ describe('GET /auth/oauth/:provider', () => {
     expect(a.state).not.toBe(b.state);
   });
 
-  it('404s for an unknown provider or one without configured credentials', async () => {
+  it('redirects to the login page for an unknown provider or one without configured credentials', async () => {
     const agent = request.agent(app.getHttpServer());
-    const unknown = await agent.get(`${API}/auth/oauth/twitter`).expect(404);
-    expect(unknown.body.error.code).toBe(ErrorCode.NOT_FOUND);
+    const login = `${appUrl}/login?error=oauth_failed`;
+    const unknown = await agent.get(`${API}/auth/oauth/twitter`).expect(302);
+    expect(unknown.headers.location).toBe(login);
+    expect(unknown.body).toEqual({});
     providers.enabled.delete('github');
-    await agent.get(`${API}/auth/oauth/github`).expect(404);
-    await agent.get(`${API}/auth/oauth/github/callback?code=x&state=y`).expect(404);
+    const disabled = await agent.get(`${API}/auth/oauth/github`).expect(302);
+    expect(disabled.headers.location).toBe(login);
+    expect(setCookies(disabled, 'kora_oauth')).toEqual([]);
+    const cb = await agent.get(`${API}/auth/oauth/github/callback?code=x&state=y`).expect(302);
+    expect(cb.headers.location).toBe(login);
+  });
+});
+
+describe('GET /auth/oauth/providers', () => {
+  it('lists only the configured providers, publicly (no session, no CSRF)', async () => {
+    const agent = request.agent(app.getHttpServer());
+    const both = await agent.get(`${API}/auth/oauth/providers`).expect(200);
+    expect(both.body).toEqual({ providers: ['google', 'github'] });
+
+    providers.enabled.delete('github');
+    const one = await agent.get(`${API}/auth/oauth/providers`).expect(200);
+    expect(one.body).toEqual({ providers: ['google'] });
+
+    providers.enabled.clear();
+    const none = await agent.get(`${API}/auth/oauth/providers`).expect(200);
+    expect(none.body).toEqual({ providers: [] });
   });
 });
 
@@ -334,6 +354,28 @@ describe('GET /auth/oauth/:provider/callback — sign-in and linking', () => {
     expect(await prisma.client.session.count()).toBe(0);
   });
 
+  it('after account deletion the same provider account and email start a brand-new user', async () => {
+    const p = profile();
+    const first = await signInWith('google', p);
+    const oldUser = await prisma.client.user.findUniqueOrThrow({ where: { email: p.email! } });
+    const token = cookieValue(first.res, 'kora_csrf')!;
+    await first.agent
+      .delete(`${API}/me`)
+      .set('Origin', appUrl)
+      .set('X-CSRF-Token', token)
+      .expect(204);
+
+    const second = await signInWith('google', p);
+    expect(second.res.headers.location).toBe(`${appUrl}/`);
+    const created = await prisma.client.user.findUniqueOrThrow({ where: { email: p.email! } });
+    expect(created.id).not.toBe(oldUser.id);
+    expect(created.deletedAt).toBeNull();
+    expect(
+      await prisma.client.oAuthAccount.findMany({ where: { provider: 'google' } }),
+    ).toMatchObject([{ userId: created.id }]);
+    expect((await whoAmI(second.agent)).body).toEqual({ id: created.id });
+  });
+
   it('concurrent first logins for the same provider account end with one user', async () => {
     const p = profile();
     const results = await Promise.all([signInWith('google', p), signInWith('google', p)]);
@@ -364,20 +406,27 @@ describe('GET /auth/oauth/:provider/callback — sign-in and linking', () => {
 });
 
 describe('GET /auth/oauth/:provider/callback — rejected flows', () => {
-  const VALIDATION = { error: expect.objectContaining({ code: ErrorCode.VALIDATION }) as unknown };
+  /** Every failure is a browser redirect to the login page: never JSON, never a session. */
+  const expectLoginRedirect = (res: Response, error = 'oauth_failed') => {
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(`${appUrl}/login?error=${error}`);
+    expect(res.body).toEqual({});
+    expectOAuthCookieCleared(res);
+    expect(setCookies(res, 'kora_sid')).toEqual([]);
+    expect(setCookies(res, 'kora_csrf')).toEqual([]);
+  };
 
-  it('a state mismatch → 400 and nothing is created', async () => {
+  it('a state mismatch → login redirect and nothing is created', async () => {
     const agent = request.agent(app.getHttpServer());
     const { state } = await start(agent, 'google');
     const code = providers.approve(state, profile());
-    const res = await callback(agent, 'google', { code, state: 'forged-state' }).expect(400);
-    expect(res.body).toEqual(VALIDATION);
+    const res = await callback(agent, 'google', { code, state: 'forged-state' });
+    expectLoginRedirect(res);
     expect(providers.exchanges).toBe(0);
-    expectOAuthCookieCleared(res);
     expect(await prisma.client.user.count()).toBe(0);
   });
 
-  it('a PKCE mismatch (a code issued to another flow) → 400', async () => {
+  it('a PKCE mismatch (a code issued to another flow) → login redirect', async () => {
     const victim = request.agent(app.getHttpServer());
     const { state: victimState } = await start(victim, 'google');
     const attacker = request.agent(app.getHttpServer());
@@ -385,62 +434,67 @@ describe('GET /auth/oauth/:provider/callback — rejected flows', () => {
     const injectedCode = providers.approve(attackerState, profile());
 
     const res = await callback(victim, 'google', { code: injectedCode, state: victimState });
-    expect(res.status).toBe(400);
-    expect(res.body).toEqual(VALIDATION);
+    expectLoginRedirect(res);
     expect(await prisma.client.user.count()).toBe(0);
   });
 
-  it('a missing, forged, expired or other-provider kora_oauth cookie → 400', async () => {
+  it('a missing, forged, expired or other-provider kora_oauth cookie → login redirect', async () => {
     const fresh = request.agent(app.getHttpServer());
-    await callback(fresh, 'google', { code: 'c', state: 's' }).expect(400);
+    expectLoginRedirect(await callback(fresh, 'google', { code: 'c', state: 's' }));
 
     const forged = request.agent(app.getHttpServer());
     const { state } = await start(forged, 'github');
-    await request(app.getHttpServer())
+    const forgedRes = await request(app.getHttpServer())
       .get(`${API}/auth/oauth/github/callback`)
       .query({ code: providers.approve(state, profile()), state })
       .set(
         'Cookie',
         `kora_oauth=${Buffer.from(JSON.stringify({ state })).toString('base64url')}.AAAA`,
-      )
-      .expect(400);
+      );
+    expectLoginRedirect(forgedRes);
 
     const late = request.agent(app.getHttpServer());
     const lateFlow = await start(late, 'github');
     clockOffset = 11 * MINUTE;
-    await callback(late, 'github', {
-      code: providers.approve(lateFlow.state, profile()),
-      state: lateFlow.state,
-    }).expect(400);
+    expectLoginRedirect(
+      await callback(late, 'github', {
+        code: providers.approve(lateFlow.state, profile()),
+        state: lateFlow.state,
+      }),
+    );
     clockOffset = 0;
 
     const crossed = request.agent(app.getHttpServer());
     const ghFlow = await start(crossed, 'github');
-    await callback(crossed, 'google', {
-      code: providers.approve(ghFlow.state, profile()),
-      state: ghFlow.state,
-    }).expect(400);
+    expectLoginRedirect(
+      await callback(crossed, 'google', {
+        code: providers.approve(ghFlow.state, profile()),
+        state: ghFlow.state,
+      }),
+    );
     expect(providers.exchanges).toBe(0); // all rejected before the code was ever used
     expect(await prisma.client.user.count()).toBe(0);
   });
 
-  it('a replayed callback → 400 (the cookie is single-use)', async () => {
+  it('a replayed callback → login redirect (the cookie is single-use)', async () => {
     const agent = request.agent(app.getHttpServer());
     const { state } = await start(agent, 'github');
     const code = providers.approve(state, profile());
     await callback(agent, 'github', { code, state }).expect(302);
-    await callback(agent, 'github', { code, state }).expect(400);
+    expectLoginRedirect(await callback(agent, 'github', { code, state }));
   });
 
-  it('a missing or repeated code/state parameter → 400', async () => {
+  it('a missing or repeated code/state parameter → login redirect', async () => {
     const agent = request.agent(app.getHttpServer());
     const { state } = await start(agent, 'github');
-    await callback(agent, 'github', { state }).expect(400);
+    expectLoginRedirect(await callback(agent, 'github', { state }));
     const again = request.agent(app.getHttpServer());
     const flow = await start(again, 'github');
-    await again
-      .get(`${API}/auth/oauth/github/callback?state=${flow.state}&state=${flow.state}&code=x`)
-      .expect(400);
+    expectLoginRedirect(
+      await again.get(
+        `${API}/auth/oauth/github/callback?state=${flow.state}&state=${flow.state}&code=x`,
+      ),
+    );
   });
 
   it('a provider error (user denied) redirects to the login page with oauth_failed', async () => {
@@ -455,7 +509,7 @@ describe('GET /auth/oauth/:provider/callback — rejected flows', () => {
     const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const agent = request.agent(app.getHttpServer());
     const { state } = await start(agent, 'github');
-    await callback(agent, 'github', { code: 'never-issued', state }).expect(400);
+    expectLoginRedirect(await callback(agent, 'github', { code: 'never-issued', state }));
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/github.*invalid_grant/));
   });
 

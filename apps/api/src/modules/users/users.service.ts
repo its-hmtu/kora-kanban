@@ -111,12 +111,26 @@ export class UsersService {
     await this.auth.signIn(userId, req, res);
   }
 
-  /** Soft delete: marks the user deleted, then revokes every session and clears the cookies. */
+  /**
+   * Soft delete that frees the email: in one transaction marks the user deleted, scrubs the email
+   * to an unroutable placeholder, drops the password, verification state, linked OAuth accounts
+   * and unused tokens, so the address (or provider account) can sign up again as a new user.
+   * Then revokes every session and clears the cookies.
+   */
   async deleteMe(userId: string, res: Response): Promise<void> {
     // TODO(US2): block when the user is the sole Owner of a workspace.
-    await this.prisma.client.user.update({
-      where: { id: userId, deletedAt: null },
-      data: { deletedAt: this.clock.now() },
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId, deletedAt: null },
+        data: {
+          deletedAt: this.clock.now(),
+          email: `deleted+${userId}@deleted.invalid`,
+          passwordHash: null,
+          emailVerifiedAt: null,
+        },
+      });
+      await tx.oAuthAccount.deleteMany({ where: { userId } });
+      await tx.verificationToken.deleteMany({ where: { userId, usedAt: null } });
     });
     await this.auth.logoutAll(userId, res);
   }

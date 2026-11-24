@@ -157,7 +157,7 @@ describe('public _auth layout', () => {
     expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
     expect(await screen.findByTestId('auth-layout')).toBeInTheDocument();
     expect(screen.getByTestId('login-page')).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/v1/me', expect.anything());
   });
 
   it.each(['//evil.com', '/\\evil.com', 'https://evil.com'])(

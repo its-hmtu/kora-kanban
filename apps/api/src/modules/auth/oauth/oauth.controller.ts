@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Public } from '../../../common/decorators/public.decorator';
+import type { OAuthProvider } from './oauth-provider.client';
 import { OAuthService } from './oauth.service';
 
 /**
@@ -10,6 +11,14 @@ import { OAuthService } from './oauth.service';
 @Controller('auth/oauth')
 export class OAuthController {
   constructor(private readonly oauth: OAuthService) {}
+
+  /** Declared before `:provider`, or Nest would treat "providers" as a provider name. */
+  @Public()
+  @Get('providers')
+  providers(@Res({ passthrough: true }) res: Response): { providers: OAuthProvider[] } {
+    res.setHeader('Cache-Control', 'no-store');
+    return { providers: this.oauth.enabledProviders() };
+  }
 
   @Public()
   @Get(':provider')

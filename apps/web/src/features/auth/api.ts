@@ -130,3 +130,22 @@ export function useDeleteAccount() {
     },
   });
 }
+
+export type OAuthProviderId = 'google' | 'github';
+
+const PROVIDERS_STALE_MS = 10 * 60_000;
+
+/** Providers the server has credentials for; the login/register pages show only these. */
+export function useOAuthProviders() {
+  return useQuery({
+    queryKey: ['oauth-providers'],
+    queryFn: async () =>
+      (
+        await apiFetch<{ providers: OAuthProviderId[] }>('/auth/oauth/providers', {
+          redirectOn401: false,
+        })
+      ).providers,
+    staleTime: PROVIDERS_STALE_MS,
+    retry: false,
+  });
+}

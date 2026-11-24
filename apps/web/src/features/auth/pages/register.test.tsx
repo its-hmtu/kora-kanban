@@ -78,11 +78,18 @@ describe('register page', () => {
     renderAt('/register');
     await fill('short');
     expect(await screen.findByText(/Use at least \d+ characters/)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.not.stringContaining('/oauth/'),
+      expect.anything(),
+    ); // only the providers lookup is allowed
   });
 
   it('has OAuth buttons and a link to login', async () => {
-    stubApi();
+    stubApi((path) =>
+      path === '/auth/oauth/providers'
+        ? { status: 200, body: { providers: ['google', 'github'] } }
+        : undefined,
+    );
     renderAt('/register');
     expect(await screen.findByRole('link', { name: 'Continue with Google' })).toHaveAttribute(
       'href',

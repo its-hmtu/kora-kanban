@@ -67,6 +67,12 @@ async function userWithPassword(overrides: Parameters<typeof createUser>[0] = {}
   return createUser({ passwordHash, ...overrides });
 }
 
+async function anonAgent() {
+  const agent = request.agent(app.getHttpServer());
+  const csrf = await agent.get(`${API}/auth/csrf`).expect(200);
+  return agent.set('Origin', appOrigin).set('X-CSRF-Token', csrf.body.csrfToken as string);
+}
+
 async function login(email: string, password: string): Promise<Response> {
   const agent = request.agent(app.getHttpServer());
   const csrf = await agent.get(`${API}/auth/csrf`).expect(200);
@@ -367,6 +373,55 @@ describe('DELETE /me', () => {
     const again = await login('bye@example.com', PASSWORD);
     expect(again.status).toBe(401);
     expect(setCookies(again, 'kora_sid')).toEqual([]);
+  });
+
+  it('scrubs the email, credentials and linked data so the address can register again', async () => {
+    const user = await userWithPassword({ email: 'again@example.com' });
+    await prisma.client.oAuthAccount.create({
+      data: {
+        userId: user.id,
+        provider: 'github',
+        providerUserId: 'gh-1',
+        email: 'again@example.com',
+        emailVerified: true,
+      },
+    });
+    const expiresAt = new Date(Date.now() + 3_600_000);
+    await prisma.client.verificationToken.createMany({
+      data: [
+        { userId: user.id, type: 'password_reset', tokenHash: 'unused', expiresAt },
+        { userId: user.id, type: 'email_verify', tokenHash: 'used', expiresAt, usedAt: new Date() },
+      ],
+    });
+    const agent = await agentFor(user);
+    await agent.delete(`${API}/me`).expect(204);
+
+    const row = await prisma.client.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(row).toMatchObject({
+      email: `deleted+${user.id}@deleted.invalid`,
+      passwordHash: null,
+      emailVerifiedAt: null,
+    });
+    expect(row.deletedAt).toBeInstanceOf(Date);
+    expect(await prisma.client.oAuthAccount.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.client.verificationToken.count({ where: { userId: user.id, usedAt: null } }),
+    ).toBe(0);
+    expect(await prisma.client.session.count({ where: { userId: user.id } })).toBe(0);
+
+    const registered = await (
+      await anonAgent()
+    )
+      .post(`${API}/auth/register`)
+      .send({ email: 'again@example.com', password: PASSWORD, name: 'New Me' });
+    expect(registered.status).toBe(201);
+    const newUser = (registered.body as { user: { id: string } }).user;
+    expect(newUser.id).not.toBe(user.id);
+    // The old session stays dead; the deleted row is untouched by the new account.
+    expect((await agent.get(`${API}/me`)).status).toBe(401);
+    expect(
+      (await prisma.client.user.findUniqueOrThrow({ where: { id: user.id } })).deletedAt,
+    ).not.toBe(null);
   });
 
   it('stamps deletedAt from the injected clock', async () => {

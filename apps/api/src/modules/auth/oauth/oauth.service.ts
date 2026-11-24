@@ -1,8 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ErrorCode } from '@kora/shared';
 import { generateCodeVerifier, generateState } from 'arctic';
 import type { CookieOptions, Request, Response } from 'express';
-import { DomainError } from '../../../common/errors/domain-error';
 import { APP_CONFIG } from '../../../infra/config/config.module';
 import type { Env } from '../../../infra/config/env';
 import { CryptoService } from '../../../infra/crypto/crypto.service';
@@ -33,10 +31,6 @@ type Resolution = { userId: string } | { error: OAuthLoginError };
 
 const NAME_MAX = 100;
 
-const notFound = () => new DomainError(ErrorCode.NOT_FOUND, 404);
-/** State/PKCE/cookie problems: the request is not a callback for a flow this browser started. */
-const badCallback = () => new DomainError(ErrorCode.VALIDATION, 400);
-
 const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 
@@ -61,9 +55,18 @@ export class OAuthService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  /** Stores the flow in the `kora_oauth` cookie; returns the provider URL to redirect to. */
+  /** Providers with configured credentials, in `OAUTH_PROVIDERS` order (the web hides the rest). */
+  enabledProviders(): OAuthProvider[] {
+    return OAUTH_PROVIDERS.filter((p) => this.providers.isEnabled(p));
+  }
+
+  /**
+   * Stores the flow in the `kora_oauth` cookie; returns the URL to redirect to: the provider, or
+   * the login page for an unknown/unconfigured provider (a browser navigation never gets JSON).
+   */
   start(provider: string, next: unknown, res: Response): string {
     const p = this.enabledProvider(provider);
+    if (!p) return this.loginError('oauth_failed');
     const state = generateState();
     const codeVerifier = this.providers.usesPkce(p) ? generateCodeVerifier() : undefined;
     const url = this.providers.createAuthorizationUrl(p, state, codeVerifier);
@@ -83,8 +86,9 @@ export class OAuthService {
 
   /**
    * Completes the flow and returns where to redirect: the app (signed in) or the login page with
-   * an `?error=`. Throws 400 when the callback does not match the flow in this browser's cookie
-   * (state mismatch, missing/forged/expired cookie, or the provider rejecting the code/PKCE).
+   * an `?error=`. Every failure redirects, including a callback that does not match the flow in
+   * this browser's cookie (state mismatch, missing/forged/expired cookie, or the provider
+   * rejecting the code/PKCE); the code is never exchanged when the state check fails.
    */
   async callback(
     provider: string,
@@ -93,6 +97,7 @@ export class OAuthService {
     res: Response,
   ): Promise<string> {
     const p = this.enabledProvider(provider);
+    if (!p) return this.loginError('oauth_failed');
     const flow = openOAuthCookie(
       req.cookies?.[OAUTH_COOKIE],
       this.config.SESSION_SECRET,
@@ -110,7 +115,8 @@ export class OAuthService {
       typeof code !== 'string' ||
       code === ''
     ) {
-      throw badCallback();
+      this.logger.warn(`${p} callback does not match the flow in this browser`);
+      return this.loginError('oauth_failed');
     }
 
     let profile: OAuthProfile;
@@ -120,7 +126,7 @@ export class OAuthService {
       if (error instanceof OAuthCodeRejectedError) {
         // Visible to operators: a persistent invalid_client means a misconfigured provider.
         this.logger.warn(`${p} code rejected: ${error.providerCode}`);
-        throw badCallback();
+        return this.loginError('oauth_failed');
       }
       this.logger.warn(
         `${p} sign-in failed: ${error instanceof Error ? error.message : 'unknown'}`,
@@ -208,11 +214,10 @@ export class OAuthService {
     return result;
   }
 
-  /** 404 for unknown providers and for ones without configured credentials. */
-  private enabledProvider(provider: string): OAuthProvider {
+  /** The provider, or undefined when unknown or without configured credentials. */
+  private enabledProvider(provider: string): OAuthProvider | undefined {
     const p = OAUTH_PROVIDERS.find((known) => known === provider);
-    if (!p || !this.providers.isEnabled(p)) throw notFound();
-    return p;
+    return p && this.providers.isEnabled(p) ? p : undefined;
   }
 
   private loginError(error: OAuthLoginError): string {

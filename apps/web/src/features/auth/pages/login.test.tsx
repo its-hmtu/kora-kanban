@@ -71,7 +71,10 @@ describe('login page', () => {
     renderAt('/login');
     await fill('nope', 'x');
     expect(await screen.findByText('Enter a valid email address.')).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.not.stringContaining('/oauth/'),
+      expect.anything(),
+    ); // only the providers lookup is allowed
   });
 
   it.each([
@@ -84,7 +87,11 @@ describe('login page', () => {
   });
 
   it('links the OAuth buttons to the API start routes with an encoded next', async () => {
-    stubApi();
+    stubApi((path) =>
+      path === '/auth/oauth/providers'
+        ? { status: 200, body: { providers: ['google', 'github'] } }
+        : undefined,
+    );
     renderAt('/login?next=%2Fboards%2F1%3Fx%3D1');
     const google = await screen.findByRole('link', { name: 'Continue with Google' });
     expect(google).toHaveAttribute('href', '/api/v1/auth/oauth/google?next=%2Fboards%2F1%3Fx%3D1');
@@ -115,6 +122,9 @@ describe('login page validation', () => {
     await fill('a@b.co', '');
     expect(await screen.findByText('This field is required.')).toBeInTheDocument();
     expect(screen.queryByText(/Use at least/)).not.toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.not.stringContaining('/oauth/'),
+      expect.anything(),
+    ); // only the providers lookup is allowed
   });
 });
