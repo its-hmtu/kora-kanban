@@ -19,6 +19,7 @@ import { KoraThrottlerModule } from './infra/throttler/throttler.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { TestResetModule } from './modules/health/test-reset.module';
+import { UsersModule } from './modules/users/users.module';
 
 /**
  * Test-only modules (`POST /api/v1/__test/reset` for e2e). Decided when this file is first
@@ -51,6 +52,7 @@ const TEST_ONLY_MODULES = process.env.NODE_ENV === 'test' ? [TestResetModule] : 
     AccessModule,
     AuthModule,
     HealthModule,
+    UsersModule,
     ...TEST_ONLY_MODULES,
   ],
   providers: [
