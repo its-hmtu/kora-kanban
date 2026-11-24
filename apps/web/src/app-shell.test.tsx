@@ -3,16 +3,24 @@ import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { renderWithI18n } from '../test/i18n';
 import { __resetApiClientForTests } from '@/lib/api-client';
+import type { Me } from '@/lib/me';
 import { queryClient } from '@/lib/query-client';
 import { createAppRouter } from './router';
 
-const me = {
-  id: '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b',
-  email: 'ada@example.com',
-  name: 'Ada Lovelace',
-  locale: 'en',
-  theme: 'system',
-  timezone: 'UTC',
+const me: Me = {
+  user: {
+    id: '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b',
+    email: 'ada@example.com',
+    name: 'Ada Lovelace',
+    avatarUrl: null,
+    locale: 'en',
+    theme: 'system',
+    timezone: 'UTC',
+    emailVerifiedAt: null,
+    hasPassword: true,
+  },
+  providers: [],
+  workspaces: [],
 };
 
 function stubMe(status: number) {

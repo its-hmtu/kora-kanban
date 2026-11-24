@@ -36,7 +36,7 @@ function AppLayout() {
         className="flex h-14 items-center justify-between border-b px-4"
       >
         <span className="font-semibold">{t('app.name')}</span>
-        <span className="text-muted-foreground text-sm">{me.name}</span>
+        <span className="text-muted-foreground text-sm">{me.user.name}</span>
       </header>
       <div className="flex flex-1">
         <aside data-testid="sidebar" className="text-muted-foreground w-60 border-r p-4 text-sm">
