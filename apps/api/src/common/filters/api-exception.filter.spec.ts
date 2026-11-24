@@ -152,7 +152,8 @@ describe('ApiExceptionFilter', () => {
 });
 
 describe('en.json', () => {
-  it('has a message for every ErrorCode', () => {
-    expect(Object.keys(en).sort()).toEqual(Object.values(ErrorCode).sort());
+  it('has a message for every ErrorCode (besides the email strings)', () => {
+    const errorKeys = Object.keys(en).filter((key) => key !== 'email');
+    expect(errorKeys.sort()).toEqual(Object.values(ErrorCode).sort());
   });
 });

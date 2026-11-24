@@ -1,39 +1,25 @@
 import type { Locale } from '@kora/shared';
-import { Button, Heading, Text } from '@react-email/components';
+import en from '../../../common/i18n/messages/en.json';
+import { ActionEmail, type ActionEmailStrings } from './action-email';
 import { pick, type Dictionary } from './i18n';
-import { EmailLayout } from './layout';
 
 export interface VerifyEmailProps {
   name: string;
   url: string;
+  locale: Locale;
 }
 
-const strings: Dictionary<{ subject: string; heading: string; body: string; cta: string }> = {
-  en: {
-    subject: 'Verify your email address',
-    heading: 'Verify your email address',
-    body: 'Confirm your email address to finish setting up your Kora account.',
-    cta: 'Verify email',
-  },
-};
+const strings: Dictionary<ActionEmailStrings> = { en: en.email.verifyEmail };
+
+/** Sent after password sign-up; `url` is `${APP_URL}/verify-email?token=…`. */
+export function VerifyEmail({ name, url, locale }: VerifyEmailProps) {
+  return <ActionEmail t={pick(strings, locale)} name={name} url={url} locale={locale} />;
+}
 
 export const verifyEmail = {
-  subject: (_props: VerifyEmailProps, locale: Locale) => pick(strings, locale).subject,
-  render: (props: VerifyEmailProps, locale: Locale) => {
-    const t = pick(strings, locale);
-    return (
-      <EmailLayout locale={locale} preview={t.subject}>
-        <Heading as="h1">{t.heading}</Heading>
-        <Text>{props.name}</Text>
-        <Text>{t.body}</Text>
-        <Button
-          href={props.url}
-          style={{ backgroundColor: '#18181b', color: '#ffffff', padding: '10px 16px' }}
-        >
-          {t.cta}
-        </Button>
-        <Text>{props.url}</Text>
-      </EmailLayout>
-    );
-  },
+  subject: (_props: Omit<VerifyEmailProps, 'locale'>, locale: Locale) =>
+    pick(strings, locale).subject,
+  render: (props: Omit<VerifyEmailProps, 'locale'>, locale: Locale) => (
+    <VerifyEmail {...props} locale={locale} />
+  ),
 };

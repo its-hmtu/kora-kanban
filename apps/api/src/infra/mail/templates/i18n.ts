@@ -6,3 +6,8 @@ export type Dictionary<T> = { en: T } & Partial<Record<Locale, T>>;
 export function pick<T>(dictionary: Dictionary<T>, locale: Locale): T {
   return dictionary[locale] ?? dictionary.en;
 }
+
+/** Replaces `{key}` placeholders. React escapes the result when it is rendered. */
+export function format(template: string, values: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
+}

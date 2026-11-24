@@ -1,0 +1,35 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`email templates > reset-password: English strings from en.json, greeting, link and button 1`] = `
+"RESET YOUR PASSWORD
+
+Hi Ada,
+
+We received a request to reset the password for your Kora account. This link expires in 1 hour.
+
+Reset password https://kora.test/x?token=abc
+
+If the button does not work, copy this link into your browser:
+
+https://kora.test/x?token=abc
+
+If you did not ask to reset your password, you can ignore this email. Your password will not change.
+
+You are receiving this email because of activity on your Kora account."
+`;
+
+exports[`email templates > verify-email: English strings from en.json, greeting, link and button 1`] = `
+"VERIFY YOUR EMAIL ADDRESS
+
+Hi Ada,
+
+Confirm your email address to finish setting up your Kora account. This link expires in 24 hours.
+
+Verify email https://kora.test/x?token=abc
+
+If the button does not work, copy this link into your browser:
+
+https://kora.test/x?token=abc
+
+You are receiving this email because of activity on your Kora account."
+`;

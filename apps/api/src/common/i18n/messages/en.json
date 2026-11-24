@@ -10,5 +10,27 @@
   "WORKFLOW_VIOLATION": "This move is not allowed by the board workflow.",
   "LAST_OWNER": "A workspace must keep at least one owner.",
   "SESSION_REVOKED": "Your session has ended. Please sign in again.",
-  "INTERNAL": "Something went wrong on our side. Please try again."
+  "INTERNAL": "Something went wrong on our side. Please try again.",
+  "email": {
+    "layout": {
+      "footer": "You are receiving this email because of activity on your Kora account."
+    },
+    "verifyEmail": {
+      "subject": "Verify your email address",
+      "heading": "Verify your email address",
+      "greeting": "Hi {name},",
+      "body": "Confirm your email address to finish setting up your Kora account. This link expires in 24 hours.",
+      "cta": "Verify email",
+      "fallback": "If the button does not work, copy this link into your browser:"
+    },
+    "resetPassword": {
+      "subject": "Reset your Kora password",
+      "heading": "Reset your password",
+      "greeting": "Hi {name},",
+      "body": "We received a request to reset the password for your Kora account. This link expires in 1 hour.",
+      "cta": "Reset password",
+      "fallback": "If the button does not work, copy this link into your browser:",
+      "ignore": "If you did not ask to reset your password, you can ignore this email. Your password will not change."
+    }
+  }
 }

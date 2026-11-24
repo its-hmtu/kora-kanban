@@ -1,11 +1,10 @@
 import type { Locale } from '@kora/shared';
 import { Body, Container, Head, Html, Preview, Section, Text } from '@react-email/components';
 import type { ReactNode } from 'react';
+import en from '../../../common/i18n/messages/en.json';
 import { pick, type Dictionary } from './i18n';
 
-const strings: Dictionary<{ footer: string }> = {
-  en: { footer: 'You are receiving this email because of activity on your Kora account.' },
-};
+const strings: Dictionary<{ footer: string }> = { en: en.email.layout };
 
 export interface EmailLayoutProps {
   locale: Locale;
