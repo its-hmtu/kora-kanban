@@ -34,10 +34,8 @@ test('register, verify, sign out, sign in, reset the password and sign in with i
   await expect(page.getByTestId('index-page')).toBeAttached();
   await expect(page.getByText('Please verify your email')).toBeHidden();
 
-  // Sign out from the profile settings (the app's only sign-out control so far).
-  await page.getByRole('link', { name }).click();
-  await page.getByRole('button', { name: 'Sign out of all devices' }).click();
-  await page.getByRole('button', { name: 'Sign out everywhere' }).click();
+  // Sign out of this device from the top bar.
+  await page.getByTestId('top-bar').getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByTestId('login-page')).toBeVisible();
   await page.goto('/');
   await expect(page.getByTestId('login-page')).toBeVisible();

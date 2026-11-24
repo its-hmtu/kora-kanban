@@ -1,7 +1,8 @@
 import { RouterProvider, createMemoryHistory } from '@tanstack/react-router';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { renderWithI18n } from '../test/i18n';
+import { apiError, stubApi } from '@/features/auth/test-helpers';
 import { __resetApiClientForTests } from '@/lib/api-client';
 import type { Me } from '@/lib/me';
 import { queryClient } from '@/lib/query-client';
@@ -104,6 +105,42 @@ describe('_app route guard', () => {
     expect(await screen.findByText('Something went wrong!')).toBeInTheDocument();
     expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
     expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/');
+  });
+});
+
+describe('top bar sign out', () => {
+  it('signs out this device through POST /auth/logout and goes to /login', async () => {
+    const fetchMock = stubApi((path) => (path === '/me' ? { status: 200, body: me } : undefined));
+    const router = renderAt('/');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+
+    expect(await screen.findByTestId('login-page')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/login');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/auth/logout',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/v1/auth/logout-all', expect.anything());
+    expect(queryClient.getQueryData(['me'])).toBeUndefined();
+  });
+
+  it('stays in the app when the server rejects the sign out', async () => {
+    stubApi((path) =>
+      path === '/me'
+        ? { status: 200, body: me }
+        : path === '/auth/logout'
+          ? apiError(500, 'INTERNAL')
+          : undefined,
+    );
+    const router = renderAt('/');
+
+    const button = await screen.findByRole('button', { name: 'Sign out' });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(screen.getByTestId('top-bar')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/');
   });
 });

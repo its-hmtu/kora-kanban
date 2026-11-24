@@ -1,5 +1,7 @@
-import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, redirect, useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { useLogout } from '@/features/auth/api';
 import { VerifyEmailBanner } from '@/features/auth/components/verify-email-banner';
 import { ApiError } from '@/lib/api-client';
 import { fetchMe, meQueryKey } from '@/lib/me';
@@ -37,13 +39,16 @@ function AppLayout() {
         className="flex h-14 items-center justify-between border-b px-4"
       >
         <span className="font-semibold">{t('app.name')}</span>
-        <Link
-          to="/settings/profile"
-          title={t('shell.profileLink')}
-          className="text-muted-foreground text-sm hover:underline"
-        >
-          {me.user.name}
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/settings/profile"
+            title={t('shell.profileLink')}
+            className="text-muted-foreground text-sm hover:underline"
+          >
+            {me.user.name}
+          </Link>
+          <SignOutButton />
+        </div>
       </header>
       <VerifyEmailBanner />
       <div className="flex flex-1">
@@ -55,5 +60,22 @@ function AppLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+/** Signs out this device only; a failure stays here (the mutation cache shows the error toast). */
+function SignOutButton() {
+  const { t } = useTranslation('common');
+  const navigate = useNavigate();
+  const logout = useLogout();
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={logout.isPending}
+      onClick={() => logout.mutate(undefined, { onSuccess: () => void navigate({ to: '/login' }) })}
+    >
+      {t('shell.signOut')}
+    </Button>
   );
 }
