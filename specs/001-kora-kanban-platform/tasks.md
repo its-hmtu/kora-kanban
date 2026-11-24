@@ -209,7 +209,7 @@ integration tests only where a rule is easy to get wrong.
 
 ### Tests for User Story 1 (Constitution IV) ⚠️
 
-- [ ] T047 [P] [US1] Integration tests in `apps/api/test/integration/auth.spec.ts`:
+- [x] T047 [P] [US1] Integration tests in `apps/api/test/integration/auth.spec.ts`:
   - Register creates the user and enqueues a verify email.
   - Duplicate email → 422.
   - Login sets an `HttpOnly` `kora_sid` cookie.
@@ -222,7 +222,7 @@ integration tests only where a rule is easy to get wrong.
   - Changing the password rotates sessions.
   - A non-GET without `X-CSRF-Token` → 403.
   - `POST /auth/login` and `POST /auth/register` without a CSRF token → 403 (login CSRF protection).
-- [ ] T048 [P] [US1] Integration tests in `apps/api/test/integration/oauth.spec.ts`, with the arctic providers mocked:
+- [x] T048 [P] [US1] Integration tests in `apps/api/test/integration/oauth.spec.ts`, with the arctic providers mocked:
   - First Google login creates a user.
   - A GitHub login with a **verified** email matching an existing password account links an `OAuthAccount` and creates no new user (FR-003).
   - An **unverified** provider email is not auto-linked.
@@ -230,24 +230,24 @@ integration tests only where a rule is easy to get wrong.
 
 ### Implementation for User Story 1
 
-- [ ] T049 [P] [US1] Add `OAuthAccount` and `VerificationToken` to `apps/api/prisma/schema/identity.prisma`:
+- [x] T049 [P] [US1] Add `OAuthAccount` and `VerificationToken` to `apps/api/prisma/schema/identity.prisma`:
   - `OAuthAccount`: `id, userId, provider enum google|github, providerUserId, email, emailVerified bool, createdAt`, unique (`provider`,`providerUserId`).
   - `VerificationToken`: `id, userId, type enum email_verify|password_reset, tokenHash unique, expiresAt, usedAt?`.
   - Run migration `auth_tokens`.
-- [ ] T050 [P] [US1] Create Zod schemas in `packages/shared/src/schemas/auth.ts`:
+- [x] T050 [P] [US1] Create Zod schemas in `packages/shared/src/schemas/auth.ts`:
   - `registerSchema` `{email: email().toLowerCase(), password: string min PASSWORD_MIN(10) max 200, name: 1–100 chars}`
   - `loginSchema`
   - `forgotSchema`
   - `resetSchema` `{token, password}`
   - `changePasswordSchema`
   - `updateMeSchema` `{name?, avatarUrl?, locale?, theme?: light|dark|system, timezone?: IANA string}`
-- [ ] T051 [P] [US1] Implement `PasswordService` in `apps/api/src/modules/auth/password.service.ts`:
+- [x] T051 [P] [US1] Implement `PasswordService` in `apps/api/src/modules/auth/password.service.ts`:
   - Argon2id via `@node-rs/argon2` with "memory 19 MiB, iterations 2, parallelism 1".
   - `hash`, `verify`, `isBreached(password)` checked against `apps/api/src/modules/auth/data/common-passwords.txt` (top 10k list).
   - Registration and reset reject breached passwords with 422.
-- [ ] T052 [US1] Implement `VerificationService` in `apps/api/src/modules/auth/verification.service.ts`: `issue(userId, type)` stores only the sha256 hash, with expiry "email_verify 24 h, password_reset 1 h". `consume(token, type)` is single-use (sets `usedAt`) and rejects expired or used tokens.
-- [ ] T053 [P] [US1] Add the email templates `verify-email.tsx` and `reset-password.tsx` in `apps/api/src/infra/mail/templates/`. Both take `{name, url, locale}`, with English strings drawn from `apps/api/src/common/i18n/messages/en.json`.
-- [ ] T054 [US1] Implement `AuthService` and `AuthController` in `apps/api/src/modules/auth/`, with all routes `@Public()` except logout, logout-all and password change:
+- [x] T052 [US1] Implement `VerificationService` in `apps/api/src/modules/auth/verification.service.ts`: `issue(userId, type)` stores only the sha256 hash, with expiry "email_verify 24 h, password_reset 1 h". `consume(token, type)` is single-use (sets `usedAt`) and rejects expired or used tokens.
+- [x] T053 [P] [US1] Add the email templates `verify-email.tsx` and `reset-password.tsx` in `apps/api/src/infra/mail/templates/`. Both take `{name, url, locale}`, with English strings drawn from `apps/api/src/common/i18n/messages/en.json`.
+- [x] T054 [US1] Implement `AuthService` and `AuthController` in `apps/api/src/modules/auth/`, with all routes `@Public()` except logout, logout-all and password change:
   - `POST /auth/register` → 201 and sends the verify email.
   - `POST /auth/verify-email`.
   - `POST /auth/login` (uses the `auth` throttler).
@@ -255,28 +255,28 @@ integration tests only where a rule is easy to get wrong.
   - `POST /auth/logout-all` (also triggers socket disconnect through `SessionRevokedEvent`, which is consumed in US5).
   - `POST /auth/password/forgot`: always 204, no account enumeration.
   - `POST /auth/password/reset`: revokes all sessions.
-- [ ] T055 [US1] Implement `OAuthService` and `OAuthController` in `apps/api/src/modules/auth/oauth/` with `arctic` Google and GitHub (research B2):
+- [x] T055 [US1] Implement `OAuthService` and `OAuthController` in `apps/api/src/modules/auth/oauth/` with `arctic` Google and GitHub (research B2):
   - `GET /auth/oauth/:provider` stores `state` + `code_verifier` in a 10-min signed `kora_oauth` cookie and redirects.
   - The callback validates state, fetches the profile and verified email (GitHub: `/user/emails`, primary + verified), then either finds the `OAuthAccount`, links it to an existing user by verified email (FR-003), or creates a user with `emailVerifiedAt=now`.
   - It creates a session and redirects to `APP_URL/` (or `next`).
-- [ ] T056 [US1] Implement `UsersController` in `apps/api/src/modules/users/users.controller.ts`:
+- [x] T056 [US1] Implement `UsersController` in `apps/api/src/modules/users/users.controller.ts`:
   - `GET /me`: user + linked providers + workspaces placeholder `[]`, filled in by US2.
   - `PATCH /me`.
   - `PUT /me/password`: verifies the current password, rotates sessions.
   - `DELETE /me`: soft delete via `deletedAt`, revokes sessions. The sole-owner check is added in US2.
-- [ ] T057 [P] [US1] Create the web auth API hooks in `apps/web/src/features/auth/api.ts`: `useMe`, `useLogin`, `useRegister`, `useLogout`, `useLogoutAll`, `useForgotPassword`, `useResetPassword`, `useVerifyEmail`, `useUpdateMe`, `useChangePassword`.
-- [ ] T058 [P] [US1] Build the login and register pages:
+- [x] T057 [P] [US1] Create the web auth API hooks in `apps/web/src/features/auth/api.ts`: `useMe`, `useLogin`, `useRegister`, `useLogout`, `useLogoutAll`, `useForgotPassword`, `useResetPassword`, `useVerifyEmail`, `useUpdateMe`, `useChangePassword`.
+- [x] T058 [P] [US1] Build the login and register pages:
   - Pages: `apps/web/src/routes/_auth/login.tsx` and `apps/web/src/routes/_auth/register.tsx`.
   - Forms use react-hook-form + the shared Zod schemas.
   - "Continue with Google" and "Continue with GitHub" buttons link to `/api/v1/auth/oauth/:provider`.
   - Show a throttled-error message on 429.
-- [ ] T059 [P] [US1] Build `apps/web/src/routes/_auth/verify-email.tsx`, `forgot-password.tsx` and `reset-password.tsx`, each reading `?token=`.
-- [ ] T060 [US1] Build the profile settings page `apps/web/src/routes/_app/settings/profile.tsx`:
+- [x] T059 [P] [US1] Build `apps/web/src/routes/_auth/verify-email.tsx`, `forgot-password.tsx` and `reset-password.tsx`, each reading `?token=`.
+- [x] T060 [US1] Build the profile settings page `apps/web/src/routes/_app/settings/profile.tsx`:
   - Name, avatar URL, language select (only `en` enabled until US16), timezone and theme fields.
   - Password change form.
   - Linked sign-in methods list.
   - "Sign out of all devices" and "Delete account" actions with confirm dialogs.
-- [ ] T061 [P] [US1] E2E test `e2e/auth.spec.ts`: register → read the verify link from Mailpit API `http://localhost:8025/api/v1/messages` → verify → logout → login → forgot/reset → login with the new password.
+- [x] T061 [P] [US1] E2E test `e2e/auth.spec.ts`: register → read the verify link from Mailpit API `http://localhost:8025/api/v1/messages` → verify → logout → login → forgot/reset → login with the new password.
 
 **Checkpoint**: Quickstart steps 1–2 pass. T047, T048 and T061 are green.
 
