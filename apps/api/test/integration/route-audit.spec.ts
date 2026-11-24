@@ -17,6 +17,7 @@ import { closeHarness, createTestApp } from '../setup/test-app';
 const AUTHENTICATED_ONLY: readonly string[] = [
   'AuthController.logout',
   'AuthController.logoutAll',
+  'AuthController.resendVerification',
   'UsersController.getMe',
   'UsersController.updateMe',
   'UsersController.changePassword',

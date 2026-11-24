@@ -1,4 +1,16 @@
 {
-  "app": { "name": "Kora" },
-  "shell": { "sidebarPlaceholder": "Workspaces and boards will appear here." }
+  "app": {
+    "name": "Kora"
+  },
+  "shell": {
+    "sidebarPlaceholder": "Workspaces and boards will appear here.",
+    "verifyBanner": {
+      "message": "Please verify your email",
+      "resend": "Resend",
+      "resending": "Sending...",
+      "sent": "Verification email sent.",
+      "dismiss": "Dismiss"
+    },
+    "profileLink": "Profile settings"
+  }
 }

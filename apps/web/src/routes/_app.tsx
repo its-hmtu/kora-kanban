@@ -1,5 +1,6 @@
-import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { VerifyEmailBanner } from '@/features/auth/components/verify-email-banner';
 import { ApiError } from '@/lib/api-client';
 import { fetchMe, meQueryKey } from '@/lib/me';
 import { queryClient } from '@/lib/query-client';
@@ -36,8 +37,15 @@ function AppLayout() {
         className="flex h-14 items-center justify-between border-b px-4"
       >
         <span className="font-semibold">{t('app.name')}</span>
-        <span className="text-muted-foreground text-sm">{me.user.name}</span>
+        <Link
+          to="/settings/profile"
+          title={t('shell.profileLink')}
+          className="text-muted-foreground text-sm hover:underline"
+        >
+          {me.user.name}
+        </Link>
       </header>
+      <VerifyEmailBanner />
       <div className="flex flex-1">
         <aside data-testid="sidebar" className="text-muted-foreground w-60 border-r p-4 text-sm">
           {t('shell.sidebarPlaceholder')}

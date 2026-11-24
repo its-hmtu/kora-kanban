@@ -138,6 +138,12 @@ export class AuthService implements OnModuleInit {
     });
   }
 
+  /** Emails a fresh verification link to a signed-in, still unverified user; no-op otherwise. */
+  async resendVerification(user: AuthUser): Promise<void> {
+    if (user.emailVerifiedAt) return;
+    await this.sendVerifyEmail(user);
+  }
+
   /**
    * Always succeeds (no account enumeration); emails a reset link when the account exists. A
    * failure to issue or enqueue is logged, not surfaced: a 500 only for real accounts would leak.

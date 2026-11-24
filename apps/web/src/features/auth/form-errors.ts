@@ -32,6 +32,10 @@ function codeMessage(t: TFunction, code: string): string | undefined {
       return t('auth:errors.emailTaken');
     case 'PASSWORD_BREACHED':
       return t('auth:errors.passwordBreached');
+    case 'PASSWORD_INCORRECT':
+      return t('auth:errors.passwordIncorrect');
+    case 'PASSWORD_NOT_SET':
+      return t('auth:errors.passwordNotSet');
     case 'TOKEN_INVALID':
       return t('auth:errors.tokenInvalid');
     default:

@@ -232,6 +232,31 @@ describe('POST /auth/verify-email', () => {
   });
 });
 
+describe('POST /auth/verify-email/resend', () => {
+  it('issues a fresh verify token and enqueues the email for an unverified user', async () => {
+    const user = await createUser({ emailVerifiedAt: null, email: 'r@example.com' });
+    const agent = await agentFor(user);
+    await agent.post(`${API}/auth/verify-email/resend`).expect(204);
+    const jobs = await emailJobs();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ to: 'r@example.com', template: 'verify-email' });
+    const token = tokenFrom(jobs[0], '/verify-email');
+    await (await anonAgent()).post(`${API}/auth/verify-email`).send({ token }).expect(204);
+  });
+
+  it('is a 204 no-op when the email is already verified', async () => {
+    const user = await createUser({ emailVerifiedAt: new Date() });
+    const agent = await agentFor(user);
+    await agent.post(`${API}/auth/verify-email/resend`).expect(204);
+    expect(await emailJobs()).toHaveLength(0);
+    expect(await prisma.client.verificationToken.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it('requires a session (401 when anonymous)', async () => {
+    expect((await (await anonAgent()).post(`${API}/auth/verify-email/resend`)).status).toBe(401);
+  });
+});
+
 describe('POST /auth/login', () => {
   it('sets an HttpOnly kora_sid cookie, rotates kora_csrf and returns { user }', async () => {
     const user = await userWithPassword({ email: 'login@example.com', name: 'Lin' });

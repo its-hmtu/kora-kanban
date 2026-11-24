@@ -79,6 +79,13 @@ export function useVerifyEmail() {
   });
 }
 
+/** Emails a fresh verification link to the signed-in, unverified user. */
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/auth/verify-email/resend', { method: 'POST' }),
+  });
+}
+
 export function useUpdateMe() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -96,6 +103,18 @@ export function useChangePassword() {
     onSuccess: () => {
       resetCsrfToken();
       return queryClient.invalidateQueries({ queryKey: meQueryKey });
+    },
+  });
+}
+
+/** Like sign-out: the account is gone, so drop every cached query and the CSRF token. */
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<void>('/me', { method: 'DELETE' }),
+    onSuccess: () => {
+      resetCsrfToken();
+      queryClient.removeQueries();
     },
   });
 }

@@ -43,6 +43,13 @@ export class AuthController {
     await this.auth.verifyEmail(body.token);
   }
 
+  @AuthThrottle()
+  @Post('verify-email/resend')
+  @HttpCode(204)
+  async resendVerification(@CurrentUser() user: AuthUser): Promise<void> {
+    await this.auth.resendVerification(user);
+  }
+
   @Public()
   @AuthThrottle()
   @Post('login')

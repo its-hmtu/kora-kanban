@@ -1,1 +1,62 @@
-{}
+{
+  "title": "Profile settings",
+  "profile": {
+    "title": "Profile",
+    "name": "Name",
+    "avatarUrl": "Avatar URL",
+    "avatarInvalid": "Enter a valid https:// URL.",
+    "language": "Language",
+    "comingSoon": "coming soon",
+    "timezone": "Time zone",
+    "theme": "Theme",
+    "save": "Save changes",
+    "saving": "Saving...",
+    "saved": "Profile saved."
+  },
+  "themes": {
+    "system": "System",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch",
+    "zh-CN": "简体中文",
+    "vi": "Tiếng Việt"
+  },
+  "password": {
+    "title": "Password",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "submit": "Change password",
+    "submitting": "Changing...",
+    "changed": "Password changed.",
+    "notSetHint": "Your account has no password. Use \"Forgot password\" on the sign-in page to set one."
+  },
+  "methods": {
+    "title": "Sign-in methods",
+    "password": "Password",
+    "google": "Google",
+    "github": "GitHub"
+  },
+  "account": {
+    "title": "Account",
+    "signOutAll": {
+      "button": "Sign out of all devices",
+      "title": "Sign out of all devices?",
+      "description": "You will be signed out everywhere, including this device.",
+      "confirm": "Sign out everywhere"
+    },
+    "delete": {
+      "button": "Delete account",
+      "title": "Delete your account?",
+      "description": "This permanently removes your account. This cannot be undone.",
+      "confirm": "Delete my account"
+    },
+    "cancel": "Cancel",
+    "working": "Working..."
+  }
+}
