@@ -10,7 +10,10 @@
     },
     "typeCheck": true,
     "deleteOutDir": true,
-    "assets": [{ "include": "common/i18n/messages/*.json", "watchAssets": true }],
+    "assets": [
+      { "include": "common/i18n/messages/*.json", "watchAssets": true },
+      { "include": "modules/auth/data/*.txt", "watchAssets": true }
+    ],
     "tsConfigPath": "tsconfig.build.json"
   }
 }
